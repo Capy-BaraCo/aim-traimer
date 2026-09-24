@@ -1,0 +1,30 @@
+{
+  "name": "azimuth",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Overwatch sensitivity calibration (PSA method) and aim field manual, built with three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource/big-shoulders-display": "^5.3.0",
+    "@fontsource/geist": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/martian-mono": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
