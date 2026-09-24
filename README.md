@@ -1,5 +1,7 @@
 # Azimuth — Overwatch sensitivity lab
 
+**Play it:** https://capy-baraco.github.io/aim-traimer/
+
 Find your Overwatch sensitivity with blind **PSA** trials, in a three.js range that moves like Overwatch, then train with an aim **Field Manual** (9 chapters, 7 measured drills).
 
 ```bash
