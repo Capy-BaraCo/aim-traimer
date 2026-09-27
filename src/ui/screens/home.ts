@@ -1,4 +1,5 @@
 import { cmPer360, degPerCm, edpi, inchesPer360, STYLE_BANDS, styleFor } from '../../core/sens';
+import { rankFor, streak, totalStars } from '../../core/progress';
 import { store } from '../../core/store';
 import { App } from '../app';
 import { actions, h } from '../dom';
@@ -45,7 +46,7 @@ App.register('home', (app) => {
           <div><b>7</b>blind rounds</div>
           <div><b>±50%</b>opening window</div>
           <div><b>1/128</b>final precision</div>
-          <div><b>9 · 7</b>chapters · drills</div>
+          <div><b>7 × 10</b>drill levels</div>
         </div>
         <div class="ticker rise">
           <span>0.0066° / COUNT / SENS</span>
@@ -56,10 +57,10 @@ App.register('home', (app) => {
       </section>
 
       <section class="instruments">
-        <button class="inst rise" data-act="cal"><span class="n">01</span><span><h3>Calibrate</h3><p>PSA protocol · blind α/β samples · certificate</p></span><span class="go">→</span></button>
-        <button class="inst rise" data-act="manual"><span class="n">02</span><span><h3>Field manual</h3><p>Placement · tracking · flicks · switching · precision</p></span><span class="go">→</span></button>
-        <button class="inst rise" data-act="range"><span class="n">03</span><span><h3>Free range</h3><p>Sandbox bots · live sens nudge · movement practice</p></span><span class="go">→</span></button>
-        <button class="inst rise" data-act="tools"><span class="n">04</span><span><h3>Instruments</h3><p>Converter · mousepad fit · DPI check</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="cal"><span class="n">01</span><span><h3>Calibrate</h3><p>Find your sensitivity · blind α/β tests · tracking, short &amp; wide flicks</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="training"><span class="n">02</span><span><h3>Training</h3><p>7 drills × 10 levels · stars &amp; ranks · daily warm-up</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="manual"><span class="n">03</span><span><h3>Field manual</h3><p>Aim explained simply · 11 chapters · a drill in each</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="logbook"><span class="n">04</span><span><h3>Logbook</h3><p>Where your flicks land · reaction · aim fingerprint</p></span><span class="go">→</span></button>
         <div class="readout glass rise">
           ${swipeDial(degPerCm(s.sens, s.dpi) * 10)}
           <div>
@@ -69,6 +70,8 @@ App.register('home', (app) => {
               <tr><td>DPI / eDPI</td><td>${s.dpi} / ${Math.round(edpi(s.sens, s.dpi))}</td></tr>
               <tr><td>CM · IN / 360</td><td>${cm.toFixed(1)} · ${inchesPer360(s.sens, s.dpi).toFixed(1)}</td></tr>
               <tr><td>STYLE</td><td>${STYLE_BANDS[styleFor(cm)].label.toUpperCase()}</td></tr>
+              <tr><td>RANK · STARS</td><td>${rankFor(totalStars(store.get().progress)).name.toUpperCase()} · ${totalStars(store.get().progress)} ★</td></tr>
+              <tr><td>STREAK</td><td>${streak(store.get().days)} DAYS</td></tr>
               <tr><td>LAST CALIBRATION</td><td>${last ? `${last.result.toFixed(2)} · ${new Date(last.at).toLocaleDateString()}` : '—'}</td></tr>
             </table>
           </div>
@@ -78,8 +81,8 @@ App.register('home', (app) => {
   actions(el, {
     cal: () => app.go('calibrate'),
     manual: () => app.go('manual'),
-    range: () => app.go('range'),
-    tools: () => app.go('tools'),
+    training: () => app.go('training'),
+    logbook: () => app.go('logbook'),
   });
   return { el };
 });

@@ -10,11 +10,14 @@ import '@fontsource/geist/400';
 import '@fontsource/geist/500';
 import '@fontsource/geist/600';
 import './styles/main.css';
+import './styles/v2.css';
 
 import { App } from './ui/app';
 import './ui/screens/home';
 import './ui/screens/calibrate';
+import './ui/screens/training';
 import './ui/screens/manual';
+import './ui/screens/logbook';
 import './ui/screens/range';
 import './ui/screens/tools';
 import './ui/screens/settings';

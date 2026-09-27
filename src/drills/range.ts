@@ -116,7 +116,7 @@ export class ProtractorDrill extends Drill {
   readonly title = 'Protractor';
   override kicker = 'INSTRUMENT';
   override weapon = null;
-  override allowMove = false;
+  override movable = false;
   override duration = Infinity;
   private startYaw = 0;
   private hudT = 0;

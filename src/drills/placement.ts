@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { placementFindings } from '../core/coach';
 import { WEAPONS, type ShotResult } from '../core/game';
 import { mean } from '../core/metrics';
 import { PeekBrain } from '../world/brain';
@@ -14,9 +15,9 @@ export class CornerWatchDrill extends Drill {
   readonly title = 'Corner Watch';
   override kicker = 'CROSSHAIR PLACEMENT';
   override weapon = WEAPONS.rail;
-  override allowMove = false;
+  override movable = false;
   override duration = 60;
-  private readonly peeks = 14;
+  private readonly peeks: number;
   private count = 0;
   private current: Figure | null = null;
   private brain: PeekBrain | null = null;
@@ -31,6 +32,18 @@ export class CornerWatchDrill extends Drill {
   private heads = 0;
   private kills = 0;
   private hudT = 0;
+  private readonly points: { x: number; y: number }[] = [];
+
+  constructor(
+    g: ConstructorParameters<typeof Drill>[0],
+    private readonly p: { exposure: [number, number]; peeks: number; hp: number },
+    level: number,
+  ) {
+    super(g);
+    this.level = level;
+    this.peeks = p.peeks;
+    this.duration = p.peeks * 5 + 4;
+  }
 
   setup(): void {}
 
@@ -51,8 +64,8 @@ export class CornerWatchDrill extends Drill {
     const tangent = new Vector3(Math.cos(b), 0, Math.sin(b));
     const hide = fin.box.center.clone().setY(0).addScaledVector(radial, 1.25);
     const f = this.g.spawnHumanoid(hide.x, hide.z);
-    f.hp = f.maxHp = 140;
-    this.brain = new PeekBrain(f, hide, tangent, fin.width / 2 + 0.85, 0.5 + Math.random() * 1.8);
+    f.hp = f.maxHp = this.p.hp;
+    this.brain = new PeekBrain(f, hide, tangent, fin.width / 2 + 0.85, 0.5 + Math.random() * 1.8, this.p.exposure);
     this.g.setBrain(f, this.brain);
     this.current = f;
     this.seenAt = -1;
@@ -72,6 +85,8 @@ export class CornerWatchDrill extends Drill {
         const dp = a.pitch - aim.pitch;
         this.errors.push(Math.hypot(dy, dp));
         this.vertical.push(dp);
+        this.points.push({ x: -dy, y: -dp });
+        if (Math.hypot(dy, dp) > 10 && this.errors.length % 3 === 0) this.coach.nudge('Rest your crosshair on the wall edges, at head height.', 'fix');
       }
       if (this.brain.phase === 'exposed' || this.brain.phase === 'out') this.wasExposed = true;
       if (this.wasExposed && this.brain.phase === 'hidden') {
@@ -119,24 +134,21 @@ export class CornerWatchDrill extends Drill {
   report(): DrillReport {
     const err = mean(this.errors);
     const vert = mean(this.vertical);
-    const notes: string[] = [];
-    if (err > 8) notes.push(`When a head appeared your crosshair was ${err.toFixed(1)}° away on average. Park it on the edge of the cover where the head will appear, not in open space.`);
-    else if (err > 0) notes.push(`${err.toFixed(1)}° average placement error — every degree you remove is reaction time you get back.`);
-    if (vert > 0.8) notes.push(`You sit ${vert.toFixed(1)}° below head height. In Overwatch most heads are at roughly the same height: lift your default crosshair level.`);
-    else if (vert < -0.8) notes.push(`You sit ${Math.abs(vert).toFixed(1)}° above head height. Lower your resting line to where heads actually are.`);
-    if (this.escapes > 2) notes.push(`${this.escapes} figures got away. Pre-aim reduces the flick you need — the kill should be one short adjustment.`);
+    const placement = { error: err, vertical: vert, escapes: this.escapes, count: this.count, points: this.points };
     return {
       id: this.id,
       title: this.title,
+      level: this.level,
       score: Math.round(100 * (this.kills / Math.max(1, this.count)) * Math.max(0.2, 1 - err / 12)),
       stats: [
-        { label: 'Placement error', value: err ? err.toFixed(1) : '—', unit: '°', hint: 'Crosshair → head when it appeared' },
-        { label: 'Vertical offset', value: vert ? (vert > 0 ? '−' : '+') + Math.abs(vert).toFixed(1) : '—', unit: '°' },
+        { label: 'Crosshair distance from head', value: err ? err.toFixed(1) : '—', unit: '°', hint: 'When the head first appeared' },
+        { label: 'Crosshair height vs head', value: vert ? (vert > 0 ? '−' : '+') + Math.abs(vert).toFixed(1) : '—', unit: '°' },
         { label: 'Time to kill', value: ms(mean(this.ttk)), unit: 'ms' },
-        { label: 'Crit shots', value: pct(this.shots ? this.heads / this.shots : 0), unit: '%' },
+        { label: 'Headshots', value: pct(this.shots ? this.heads / this.shots : 0), unit: '%' },
         { label: 'Escaped', value: `${this.escapes}/${this.count}` },
       ],
-      notes,
+      notes: placementFindings(placement).map((f) => f.title),
+      analytics: { placement },
     };
   }
 }

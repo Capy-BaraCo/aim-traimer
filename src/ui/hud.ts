@@ -71,6 +71,8 @@ export class Hud {
   private readonly sg: CanvasRenderingContext2D;
   private readonly legend: HTMLElement;
   private readonly toast: HTMLElement;
+  private readonly cueEl: HTMLElement;
+  private cueTimer = 0;
   private samples: ScopeSample[] = [];
   private lastRail = '';
   private lastTimer = '';
@@ -107,6 +109,7 @@ export class Hud {
       <div class="hud-center"></div>
       <div class="hud-sample"></div>
       <div class="hud-toast"></div>
+      <div class="hud-cue"><span class="hud-cue-tag">COACH</span><span class="hud-cue-text"></span></div>
       <div class="hud-keys"><span><b>WASD</b> move</span><span><b>SPACE</b> jump</span><span><b>C/SHIFT</b> crouch</span><span><b>ESC</b> pause</span></div>
       <div class="hud-fps"></div>
     `;
@@ -127,6 +130,7 @@ export class Hud {
     this.scope = q('.hud-scope canvas');
     this.legend = q('.hud-scope-legend');
     this.toast = q('.hud-toast');
+    this.cueEl = q('.hud-cue');
     this.sg = this.scope.getContext('2d')!;
     this.resizeScope();
     window.addEventListener('resize', () => this.resizeScope());
@@ -197,6 +201,18 @@ export class Hud {
     this.toastTimer = 0.7;
   }
 
+  /** A short coaching line under the crosshair area; fades by itself. */
+  cue(text: string, tone: 'fix' | 'good' = 'fix'): void {
+    (this.cueEl.querySelector('.hud-cue-text') as HTMLElement).textContent = text;
+    this.cueEl.className = `hud-cue on ${tone}`;
+    this.cueTimer = 3.6;
+  }
+
+  clearCue(): void {
+    this.cueTimer = 0;
+    this.cueEl.classList.remove('on');
+  }
+
   hit(head: boolean, kill: boolean): void {
     this.hitmarker.classList.remove('on', 'head', 'kill');
     void this.hitmarker.offsetWidth; // restart the CSS animation
@@ -239,6 +255,10 @@ export class Hud {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.toast.classList.remove('on');
+    }
+    if (this.cueTimer > 0) {
+      this.cueTimer -= realDt;
+      if (this.cueTimer <= 0) this.cueEl.classList.remove('on');
     }
     if (this.scopeEnabled && this.root.classList.contains('on')) this.drawScope(now);
   }

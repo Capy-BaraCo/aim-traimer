@@ -85,6 +85,9 @@ export class Game {
   private onDone: ((r: DrillReport) => void) | null = null;
   private last = performance.now();
   private attractYaw = 0;
+  /** While menus cover the backdrop, draw it at this rate instead of every frame (0 = every frame). */
+  backdropFps = 0;
+  private backdropT = 0;
 
   onPause: (paused: boolean) => void = () => {};
   /** Extra per-frame hook for screens that animate with the scene. */
@@ -217,6 +220,14 @@ export class Game {
     return true;
   }
 
+  /** Metres from the eye to the first wall along unit direction `d` (Infinity if open). */
+  wallDistance(d: Vector3): number {
+    this.eye(_o);
+    let best = Infinity;
+    for (const b of this.arena.colliders) best = Math.min(best, b.ray(_o, d));
+    return best;
+  }
+
   // ---------------------------------------------------------------- figures
 
   spawnHumanoid(x: number, z: number, brain?: Partial<StrafeOptions> | Brain, color = PALETTE.targetCore): Figure {
@@ -344,6 +355,7 @@ export class Game {
     this.hud.setHeader(drill.kicker, drill.title);
     this.hud.setStats([]);
     this.hud.setPhase('');
+    this.hud.clearCue();
     drill.setup();
     this.countdown = opts.countdown ?? 3;
     this.countdownLabel = opts.label ?? '';
@@ -369,6 +381,7 @@ export class Game {
     this.hud.show(false);
     this.hud.message('');
     this.hud.setSample('', '');
+    this.hud.clearCue();
     this.clearFigures();
     this.spawnAttractBots();
     this.input.unlock();
@@ -397,7 +410,11 @@ export class Game {
       this.step(dt);
       this.hud.frame(dt, this.clock, raw);
       this.onFrame(dt);
-      this.engine.render(dt);
+      if (this.mode === 'play' || !this.backdropFps) this.engine.render(dt);
+      else if ((this.backdropT += raw) >= 1 / this.backdropFps) {
+        this.engine.render(Math.min(0.1, this.backdropT));
+        this.backdropT = 0;
+      }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -462,6 +479,7 @@ export class Game {
         for (const [f, b] of this.brains) if (f.alive) b.update(dt, eye);
         const d = this.drill;
         d.elapsed += dt;
+        d.coach.tick(dt);
         d.update(dt);
         this.hud.setTimer(d.duration - d.elapsed, d.duration);
         if (d.done || d.elapsed >= d.duration) this.finishDrill();

@@ -141,30 +141,61 @@ export class TrackingMeter {
 
 export type Focus = 'balanced' | 'tracking' | 'flick';
 
-export const FOCUS_WEIGHTS: Record<Focus, { track: number; speed: number; precision: number }> = {
-  balanced: { track: 0.5, speed: 0.25, precision: 0.25 },
-  tracking: { track: 0.7, speed: 0.15, precision: 0.15 },
-  flick: { track: 0.3, speed: 0.35, precision: 0.35 },
+/** How much each section of a PSA sample counts, by what you play. */
+export const FOCUS_WEIGHTS: Record<Focus, { track: number; short: number; wide: number }> = {
+  balanced: { track: 0.4, short: 0.35, wide: 0.25 },
+  tracking: { track: 0.65, short: 0.2, wide: 0.15 },
+  flick: { track: 0.2, short: 0.45, wide: 0.35 },
 };
 
-export interface TrialMetrics {
-  trackAcc: number; // 0..1
-  trackErr: number; // mean deg
-  trackTrail: number; // deg, + trailing
-  flickTimeMs: number; // mean time-to-hit for hit targets
-  flickHitRate: number; // targets hit / targets shown
-  flickAcc: number; // hits / shots
+export interface SectionFlickMetrics {
+  n: number;
+  timeMs: number;
+  hitRate: number;
+  acc: number;
+  /** Median landing of the first movement (1 = on target). */
+  landing: number;
   tally: FlickTally;
 }
 
-/** Map a mean time-to-hit to 0..1 (350 ms or faster = 1, 1400 ms or slower = 0). */
+export interface TrialMetrics {
+  /** null when the tracking section was switched off. */
+  trackAcc: number | null;
+  trackErr: number;
+  trackTrail: number;
+  trackDelayMs: number | null;
+  short: SectionFlickMetrics | null;
+  wide: SectionFlickMetrics | null;
+  /** Short + wide combined. */
+  tally: FlickTally;
+}
+
+/** Map a mean time-to-hit to 0..1 for wide flicks (350 ms or faster = 1, 1400 ms or slower = 0). */
 export const speedScore = (ms: number): number => Math.min(1, Math.max(0, (1400 - ms) / 1050));
+
+/** Same for short, on-screen flicks (300 ms = 1, 1000 ms = 0). */
+export const speedScoreShort = (ms: number): number => Math.min(1, Math.max(0, (1000 - ms) / 700));
+
+const sectionScore = (m: SectionFlickMetrics, speed: (ms: number) => number) =>
+  m.hitRate * (0.5 + 0.5 * speed(m.timeMs)) * (0.6 + 0.4 * m.acc);
 
 export function trialScore(m: TrialMetrics, focus: Focus): number {
   const w = FOCUS_WEIGHTS[focus];
-  const precision = m.flickAcc * 0.6 + m.flickHitRate * 0.4;
-  const s = w.track * m.trackAcc + w.speed * speedScore(m.flickTimeMs) * m.flickHitRate + w.precision * precision;
-  return Math.round(s * 1000) / 10;
+  let sum = 0;
+  let weight = 0;
+  if (m.trackAcc !== null) {
+    sum += w.track * m.trackAcc;
+    weight += w.track;
+  }
+  if (m.short) {
+    sum += w.short * sectionScore(m.short, speedScoreShort);
+    weight += w.short;
+  }
+  if (m.wide) {
+    sum += w.wide * sectionScore(m.wide, speedScore);
+    weight += w.wide;
+  }
+  return weight ? Math.round((sum / weight) * 1000) / 10 : 0;
 }
 
 export const mean = (xs: readonly number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);

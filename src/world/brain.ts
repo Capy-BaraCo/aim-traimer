@@ -12,9 +12,22 @@ export interface StrafeOptions {
   near: number;
   far: number;
   speedMul?: number;
+  /** Fine-tune the style (used by drill levels). */
+  tuning?: Partial<StyleTuning>;
 }
 
-const STYLE: Record<BotStyle, { min: number; max: number; flip: number; jump: number; crouch: number; speed: number }> = {
+export interface StyleTuning {
+  /** Shortest / longest time between direction decisions, seconds. */
+  min: number;
+  max: number;
+  /** Chance a decision flips direction. */
+  flip: number;
+  jump: number;
+  crouch: number;
+  speed: number;
+}
+
+const STYLE: Record<BotStyle, StyleTuning> = {
   // Ranked-duel ADAD: short, irregular strafes, the odd jump and crouch-spam.
   duel: { min: 0.16, max: 0.75, flip: 0.82, jump: 0.12, crouch: 0.1, speed: 1 },
   // Readable, longer strafes for learning to stay glued.
@@ -43,14 +56,14 @@ export class StrafeBrain implements Brain {
   private timer = 0;
   private crouchFor = 0;
   private readonly anchor: Vector3;
-  private readonly cfg: (typeof STYLE)[BotStyle];
+  private readonly cfg: StyleTuning;
 
   constructor(
     private readonly fig: Figure,
     private readonly opts: StrafeOptions,
   ) {
     this.anchor = fig.position.clone();
-    this.cfg = STYLE[opts.style];
+    this.cfg = { ...STYLE[opts.style], ...opts.tuning };
     this.timer = this.nextInterval();
     fig.mover.speedMul = this.cfg.speed * (opts.speedMul ?? 1);
   }
@@ -110,6 +123,8 @@ export class PeekBrain implements Brain {
     tangent: Vector3,
     reach: number,
     firstWait = 0.6 + Math.random() * 1.6,
+    /** How long the figure stays out in the open, seconds [min, max]. */
+    private readonly exposure: [number, number] = [0.7, 1.5],
   ) {
     this.hide = hide.clone();
     this.tangent = tangent.clone().normalize();
@@ -142,7 +157,7 @@ export class PeekBrain implements Brain {
     } else if (this.phase === 'out') {
       this.phase = 'exposed';
       this.t = 0;
-      this.wait = 0.7 + Math.random() * 0.8;
+      this.wait = this.exposure[0] + Math.random() * (this.exposure[1] - this.exposure[0]);
     } else if (this.phase === 'back') {
       this.phase = 'hidden';
       this.t = 0;

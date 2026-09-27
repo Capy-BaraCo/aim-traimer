@@ -1210,7 +1210,8 @@ input[type='range']::-moz-range-thumb {
 button.sample:hover,
 .sample.pickable:hover {
   border-color: var(--c);
-  background: var(--soft);
+  /* Tint over the glass, not instead of it: over a bright sky the bare tint washed the text out. */
+  background: linear-gradient(var(--soft), var(--soft)), var(--glass);
   transform: translateY(-3px);
 }
 

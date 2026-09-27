@@ -1,4 +1,7 @@
+import type { FlickRecord } from '../core/analytics';
+import { LiveCoach, type TrackingFacts } from '../core/coach';
 import type { Game, ShotResult, WeaponSpec } from '../core/game';
+import { store } from '../core/store';
 import type { Figure } from '../world/figure';
 
 export interface ReportStat {
@@ -8,14 +11,26 @@ export interface ReportStat {
   hint?: string;
 }
 
+/** Structured output the debrief, coach and Logbook read. */
+export interface DrillAnalytics {
+  flicks?: FlickRecord[];
+  flickContext?: 'short' | 'wide' | 'mixed';
+  tracking?: TrackingFacts;
+  placement?: { error: number; vertical: number; escapes: number; count: number; points: { x: number; y: number }[] };
+  switching?: { switchMs: number; acc: number; kills: number };
+  movement?: { moving: number };
+}
+
 export interface DrillReport {
   id: string;
   title: string;
   /** 0–100, comparable across runs of the same drill. */
   score: number;
   stats: ReportStat[];
-  /** Coach notes generated from the numbers. */
+  /** Coach notes generated from the numbers (legacy plain list). */
   notes: string[];
+  level?: number;
+  analytics?: DrillAnalytics;
   /** Drill-specific payload (e.g. PSA trial metrics). */
   data?: unknown;
 }
@@ -25,14 +40,23 @@ export abstract class Drill {
   abstract readonly title: string;
   kicker = 'DRILL';
   weapon: WeaponSpec | null = null;
-  allowMove = true;
+  /** Whether WASD/jump/crouch work. Override `allowMove` for phase-dependent rules. */
+  movable = true;
   duration = 30;
   elapsed = 0;
   done = false;
+  level = 1;
   /** Facing when the drill starts (bearing, degrees). */
   startBearing = 0;
+  readonly coach: LiveCoach;
 
-  constructor(protected readonly g: Game) {}
+  constructor(protected readonly g: Game) {
+    this.coach = new LiveCoach((text, tone) => g.hud.cue(text, tone), store.settings.coachCues);
+  }
+
+  get allowMove(): boolean {
+    return this.movable;
+  }
 
   /** Spawn figures, set weapon. Runs before the countdown. */
   abstract setup(): void;

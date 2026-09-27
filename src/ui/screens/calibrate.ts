@@ -24,8 +24,10 @@ import {
   styleFor,
 } from '../../core/sens';
 import { store } from '../../core/store';
-import { CalibrationTrial, type TrialData } from '../../drills/trial';
+import { summariseFlicks, type FlickRecord } from '../../core/analytics';
+import { CalibrationTrial, PLAN, sampleSeconds, SECTION_INFO, type Section, type Sections, type TrialData } from '../../drills/trial';
 import { App } from '../app';
+import { landingMap } from '../charts';
 import { actions, h } from '../dom';
 
 type Source = 'current' | 'game' | 'cm' | 'pad';
@@ -55,6 +57,7 @@ interface Session {
   focus: Focus;
   rounds: number;
   blind: boolean;
+  sections: Sections;
   fine: boolean;
   warmedUp: boolean;
   psa: PsaState | null;
@@ -79,6 +82,7 @@ function freshSession(): Session {
     focus: s.focus,
     rounds: s.rounds,
     blind: s.blind,
+    sections: { ...s.calSections },
     fine: false,
     warmedUp: false,
     psa: null,
@@ -106,11 +110,13 @@ function baseSens(s: Session): number {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-const FOCI: { id: Focus; title: string; heroes: string; blurb: string }[] = [
-  { id: 'balanced', title: 'Balanced', heroes: 'Soldier · Sojourn · Ana · Ashe', blurb: '12 s tracking, 8 flicks' },
-  { id: 'tracking', title: 'Tracking', heroes: 'Tracer · Sombra · Zarya · Bastion', blurb: '16 s tracking, 5 flicks' },
-  { id: 'flick', title: 'Flick', heroes: 'Cassidy · Widowmaker · Hanzo', blurb: '8 s tracking, 11 flicks' },
+const FOCI: { id: Focus; title: string; heroes: string }[] = [
+  { id: 'balanced', title: 'Balanced', heroes: 'Soldier · Sojourn · Ana · Ashe' },
+  { id: 'tracking', title: 'Tracking', heroes: 'Tracer · Sombra · Zarya · Bastion' },
+  { id: 'flick', title: 'Flick', heroes: 'Cassidy · Widowmaker · Hanzo' },
 ];
+
+const focusBlurb = (f: Focus) => `${PLAN[f].track} s tracking · ${PLAN[f].short} short · ${PLAN[f].wide} wide flicks`;
 
 App.register('calibrate', (app) => {
   if (!session) session = freshSession();
@@ -170,7 +176,7 @@ App.register('calibrate', (app) => {
       const sens = sensOf(step, sample);
       g.sens = sens;
       g.hud.setSample(label(sample, sens), sample);
-      return new CalibrationTrial(g, sample === 'alpha' ? 'Sample α' : 'Sample β', kicker, s.focus);
+      return new CalibrationTrial(g, sample === 'alpha' ? 'Sample α' : 'Sample β', kicker, s.focus, s.sections);
     };
     app.play(
       make('alpha'),
@@ -223,7 +229,7 @@ App.register('calibrate', (app) => {
     s.picks = [];
     s.saved = false;
     s.stage = 'round';
-    store.setSettings({ focus: s.focus, rounds: s.rounds, blind: s.blind, dpi: s.dpi });
+    store.setSettings({ focus: s.focus, rounds: s.rounds, blind: s.blind, dpi: s.dpi, calSections: { ...s.sections } });
     render();
   };
 
@@ -245,6 +251,17 @@ App.register('calibrate', (app) => {
       S().rounds = Number(el.dataset.v);
       render();
     },
+    section: (el) => {
+      const sec = S().sections;
+      const k = el.dataset.v as Section;
+      const on = Object.values(sec).filter(Boolean).length;
+      if (sec[k] && on === 1) {
+        app.toast('Keep at least one section in each sample.');
+        return;
+      }
+      sec[k] = !sec[k];
+      render();
+    },
     start: () => {
       const b = baseSens(S());
       if (!(b > 0.05 && b < 100)) {
@@ -262,7 +279,7 @@ App.register('calibrate', (app) => {
       app.play(
         () => {
           app.game.sens = baseSens(s);
-          return new CalibrationTrial(app.game, 'Warm-up', 'CALIBRATION · WARM-UP', s.focus);
+          return new CalibrationTrial(app.game, 'Warm-up', 'CALIBRATION · WARM-UP', s.focus, s.sections);
         },
         () => {
           app.endPlay();
@@ -379,7 +396,7 @@ function setupHtml(s: Session): string {
       <p class="note" style="margin:0;align-self:end">A comfortable full sweep of your free space should turn you about <b>180°</b> — so cm/360 ≈ 2 × width.</p>`;
 
   const inProgress = s.psa && !isDone(s.psa);
-  const minutes = Math.round((s.rounds * (2 * sampleSeconds(s.focus) + 15)) / 60);
+  const minutes = Math.round((s.rounds * (2 * sampleSeconds(s.focus, s.sections) + 15)) / 60);
   return `
   <div class="cal">
     <aside class="cal-side">
@@ -410,11 +427,25 @@ function setupHtml(s: Session): string {
       <div class="panel glass rise">
         <h4><span>02 · What do you play?</span><span>weights each sample</span></h4>
         <div class="focus-cards">${FOCI.map(
-          (f) => `<button class="${s.focus === f.id ? 'on' : ''}" data-act="focus" data-v="${f.id}"><b>${f.title}</b><span>${f.heroes}</span><span class="mono" style="font-size:10px">${f.blurb}</span></button>`,
+          (f) => `<button class="${s.focus === f.id ? 'on' : ''}" data-act="focus" data-v="${f.id}"><b>${f.title}</b><span>${f.heroes}</span><span class="mono" style="font-size:10px">${focusBlurb(f.id)}</span></button>`,
         ).join('')}</div>
       </div>
       <div class="panel glass rise">
-        <h4><span>03 · Protocol</span><span>≈ ${minutes} min total</span></h4>
+        <h4><span>03 · What each sample contains</span><span>≈ ${Math.round(sampleSeconds(s.focus, s.sections))} s per sample</span></h4>
+        <div class="sections">${(['track', 'short', 'wide'] as Section[])
+          .map(
+            (k) => `<button class="sec ${s.sections[k] ? 'on' : ''}" data-act="section" data-v="${k}" aria-pressed="${s.sections[k]}">
+              <i class="tick">${s.sections[k] ? '✓' : ''}</i>
+              <b>${SECTION_INFO[k].name}${k === 'short' ? ' <span class="tag">NEW</span>' : ''}</b>
+              <span>${SECTION_INFO[k].plain}</span>
+              <span class="mono muted" style="font-size:10px">${k === 'track' ? `${PLAN[s.focus].track} s` : `${PLAN[s.focus][k]} targets`}</span>
+            </button>`,
+          )
+          .join('')}</div>
+        <p class="note" style="margin:12px 0 0">Short flicks (targets already on your screen) are most of the aiming you do in Overwatch — they usually favour a slightly lower sensitivity. Wide flicks (turning to someone beside or behind you) favour a higher one. Keeping both finds your balance.</p>
+      </div>
+      <div class="panel glass rise">
+        <h4><span>04 · Protocol</span><span>≈ ${minutes} min total</span></h4>
         <div class="grid2" style="align-items:center">
           <div class="seg">${[5, 7, 9].map((n) => `<button class="${s.rounds === n ? 'on' : ''}" data-act="rounds" data-v="${n}">${n} · ${n === 7 ? 'std' : n === 5 ? 'quick' : 'deep'}</button>`).join('')}</div>
           <label class="switch"><span class="note"><b>Blind samples</b> — hide the numbers until the end</span><input type="checkbox" data-bind="blind" ${s.blind ? 'checked' : ''}><i></i></label>
@@ -435,17 +466,20 @@ function sampleCard(sample: Sample, d: TrialData | undefined, other: TrialData |
     return `<${tag} class="sample ${sample}"><span class="glyph">${glyph}</span><span class="name">Sample ${sample} · not played yet</span>${blind ? '' : `<span class="val">${sens.toFixed(2)}<br>${cmPer360(sens, store.settings.dpi).toFixed(1)} cm</span>`}</${tag}>`;
   const m = d.metrics;
   const o = other?.metrics;
-  const better = (a: number, b: number | undefined, higher = true) => (b === undefined ? '' : (higher ? a > b : a < b) ? 'win' : '');
+  const better = (a: number | null | undefined, b: number | null | undefined, higher = true) =>
+    a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b) ? '' : (higher ? a > b : a < b) ? 'win' : '';
   const bias = flickBias(m.tally);
+  const land = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 100)}%` : '—');
+  const closer = (a?: number, b?: number) => (a == null || b == null ? '' : Math.abs(a - 1) < Math.abs(b - 1) ? 'win' : '');
   return `<${tag} class="sample ${sample} ${pickable ? 'pickable' : ''}" ${pickable ? `data-act="pick" data-s="${sample}"` : ''}>
     <span class="glyph">${glyph}</span>
     ${blind ? '' : `<span class="val">${sens.toFixed(2)}<br>${cmPer360(sens, store.settings.dpi).toFixed(1)} cm</span>`}
     <div class="score">${d.score.toFixed(1)}<small>DATA SCORE</small></div>
     <dl>
-      <dt>Tracking on target</dt><dd class="${better(m.trackAcc, o?.trackAcc)}">${Math.round(m.trackAcc * 100)}%</dd>
-      <dt>Flick time</dt><dd class="${better(m.flickTimeMs, o?.flickTimeMs, false)}">${Math.round(m.flickTimeMs)} ms</dd>
-      <dt>Flicks landed</dt><dd class="${better(m.flickHitRate, o?.flickHitRate)}">${Math.round(m.flickHitRate * 100)}%</dd>
-      <dt>Over / under</dt><dd>${m.tally.overshoot} / ${m.tally.undershoot}${Math.abs(bias) > 0.25 ? (bias > 0 ? ' ↗' : ' ↘') : ''}</dd>
+      ${m.trackAcc !== null ? `<dt>Tracking · on target</dt><dd class="${better(m.trackAcc, o?.trackAcc)}">${Math.round(m.trackAcc * 100)}%</dd>` : ''}
+      ${m.short ? `<dt>Short flicks · time</dt><dd class="${better(m.short.timeMs, o?.short?.timeMs, false)}">${Math.round(m.short.timeMs)} ms</dd><dt>Short flicks · first move lands</dt><dd class="${closer(m.short.landing, o?.short?.landing)}">${land(m.short.landing)}</dd>` : ''}
+      ${m.wide ? `<dt>Wide flicks · time</dt><dd class="${better(m.wide.timeMs, o?.wide?.timeMs, false)}">${Math.round(m.wide.timeMs)} ms</dd><dt>Wide flicks · first move lands</dt><dd class="${closer(m.wide.landing, o?.wide?.landing)}">${land(m.wide.landing)}</dd>` : ''}
+      ${m.tally.total ? `<dt>Went past / stopped short</dt><dd>${m.tally.overshoot} / ${m.tally.undershoot}${Math.abs(bias) > 0.25 ? (bias > 0 ? ' ↗' : ' ↘') : ''}</dd>` : ''}
     </dl>
     ${pickable ? `<span class="pick-hint"><span>Keep <span class="gk">${glyph}</span></span><span class="kbd">${sample === 'alpha' ? '1' : '2'}</span></span>` : ''}
   </${tag}>`;
@@ -488,7 +522,7 @@ function roundHtml(s: Session): string {
         played
           ? `<div class="kicker rise">Which one felt more in control?</div>`
           : `<div class="panel glass rise">
-              <h4><span>Round ${step.round}</span><span>≈ ${Math.round(2 * sampleSeconds(s.focus))} s</span></h4>
+              <h4><span>Round ${step.round}</span><span>≈ ${Math.round(2 * sampleSeconds(s.focus, s.sections))} s</span></h4>
               <p class="lede" style="margin:0 0 18px">Play α then β back to back. You'll feel the difference in the first seconds — keep playing anyway: the second half, when you've adapted, is what matters.</p>
               <div class="actions"><button class="btn" data-act="play">Play <span class="gk">α</span> then <span class="gk">β</span> <span class="arr">→</span></button><span class="note"><span class="kbd">SPACE</span> also works · <span class="kbd">ESC</span> pauses</span></div>
             </div>`
@@ -501,12 +535,6 @@ function roundHtml(s: Session): string {
       <p class="note rise">Trust control over score: fewer surprise overshoots, smoother tracking, a looser grip. If you can't tell them apart, pick the one you'd rather play a whole match with.</p>
     </section>
   </div>`;
-}
-
-/** Rough length of one sample: tracking seconds + ~1.6 s per flick + countdown. */
-function sampleSeconds(focus: Focus): number {
-  const plan = { balanced: [12, 8], tracking: [16, 5], flick: [8, 11] }[focus];
-  return plan[0] + plan[1] * 1.6 + 3;
 }
 
 function agreement(s: Session): { agreed: number; decisive: number; ratio: number } {
@@ -583,6 +611,29 @@ function resultHtml(s: Session): string {
     tally.total += d.metrics.tally.total;
   });
   const no = String(store.get().history.length + 1).padStart(4, '0');
+  const keptData = s.picks
+    .slice(-3)
+    .map((p) => s.trials[p.round - 1]?.[p.picked])
+    .filter((d): d is TrialData => !!d);
+  const keptFlicks: FlickRecord[] = keptData.flatMap((d) => [...d.flicks.short, ...d.flicks.wide]);
+  const fs = keptFlicks.length ? summariseFlicks(keptFlicks) : null;
+  const delays = keptData.map((d) => d.tracking?.delayMs).filter((x): x is number => typeof x === 'number');
+  const land = (x: number) =>
+    !Number.isFinite(x) ? '—' : Math.abs(x - 1) < 0.03 ? 'right on target' : x > 1 ? `${Math.round((x - 1) * 100)}% past the target` : `${Math.round((1 - x) * 100)}% short of the target`;
+  const flickSection = fs
+    ? `<section class="cert-section"><h5>How your flicks land near this sensitivity</h5>
+        <p class="cert-p">${fs.buckets.short.n ? `Short flicks: your first movement stops <b>${land(fs.buckets.short.landing)}</b>. ` : ''}${
+          fs.buckets.wide.n + fs.buckets.mid.n
+            ? `Wide flicks: <b>${land(summariseFlicks(keptFlicks.filter((f) => f.bucket !== 'short')).landing)}</b>. `
+            : ''
+        }${
+          fs.rangeEffect !== null && Math.abs(fs.rangeEffect) > 0.1
+            ? 'Short and wide flicks pull in opposite directions — that is the normal "range effect", and it means this sensitivity sits between what each range wants. That is the right place to be.'
+            : 'Short and wide flicks land alike — this sensitivity suits both ranges.'
+        }${delays.length ? ` While tracking you followed dodges about <b>${Math.round(delays.reduce((a, b) => a + b, 0) / delays.length)} ms</b> late.` : ''}</p>
+        ${landingMap(keptFlicks, 'light', 'Every flick from your last three kept samples')}
+      </section>`
+    : '';
   const rows = s.picks
     .map((p) => {
       const tr = s.trials[p.round - 1];
@@ -609,6 +660,7 @@ function resultHtml(s: Session): string {
       <section class="cert-section"><h5>Rounds</h5>
         <table><thead><tr><th>ROUND</th><th>α SENS</th><th>β SENS</th><th>α SCORE</th><th>β SCORE</th><th>KEPT</th></tr></thead><tbody>${rows}</tbody></table>
       </section>
+      ${flickSection}
       <section class="cert-section"><h5>Same feel in other games (same DPI)</h5>
         <table><tbody>${GAMES.map((g) => `<tr><td>${g.name}</td><td style="text-align:right">${owToGame(final, g).toFixed(g.decimals)}</td></tr>`).join('')}</tbody></table>
       </section>

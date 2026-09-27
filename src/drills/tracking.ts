@@ -1,37 +1,27 @@
-import { WEAPONS } from '../core/game';
+import { trackingFindings } from '../core/coach';
+import { WEAPONS, type ShotResult } from '../core/game';
 import { bearingXZ } from '../world/arena';
-import type { BotStyle } from '../world/brain';
+import type { BotStyle, StyleTuning } from '../world/brain';
 import type { Figure } from '../world/figure';
-import type { ShotResult } from '../core/game';
 import { TrackingProbe } from './common';
 import { Drill, pct, type DrillReport } from './drill';
 
-export function trackingNotes(acc: number, trail: number, vertical: number): string[] {
-  const notes: string[] = [];
-  if (trail > 0.3)
-    notes.push(
-      `You trail the target by ${trail.toFixed(2)}° on average — you react to direction changes instead of reading them. Watch the strafe rhythm, keep a looser grip, and let your crosshair ride the centre of mass.`,
-    );
-  else if (trail < -0.3)
-    notes.push(
-      `You lead the target by ${Math.abs(trail).toFixed(2)}° — you're guessing the next strafe or over-correcting after reversals. Stay reactive: follow, don't predict.`,
-    );
-  else notes.push('Your lead/lag is balanced: you stay centred through direction changes.');
-  if (vertical > 0.45) notes.push(`Your crosshair sags ${vertical.toFixed(2)}° below centre mass. Jumps pull you low — track the chest, not the feet.`);
-  else if (vertical < -0.45) notes.push(`You ride ${Math.abs(vertical).toFixed(2)}° high. Great for headshots only if you can hold it — check the scope trace for drift.`);
-  if (acc < 0.3) notes.push('Under 30%: drop to the "smooth" bot until 50%+ feels routine, then return to duel strafes.');
-  else if (acc > 0.55) notes.push('Strong tracking. Add your own movement next: run Crossfire.');
-  return notes;
+export interface DuelParams {
+  style: BotStyle;
+  tuning: Partial<StyleTuning>;
+  /** Distance band the figure keeps from you, metres. Closer = faster across your screen. */
+  near: number;
+  far: number;
 }
 
 /** Stay on a strafing figure. Auto weapon, hold fire. */
 export class DuelistDrill extends Drill {
-  readonly id: string;
-  readonly title: string;
+  readonly id: string = 'duelist';
+  readonly title: string = 'Duelist';
   override kicker = 'TRACKING';
   override weapon = WEAPONS.pulse;
   override duration = 30;
-  protected probe = new TrackingProbe();
+  protected readonly probe: TrackingProbe;
   protected target: Figure | null = null;
   protected kills = 0;
   protected shots = 0;
@@ -42,11 +32,12 @@ export class DuelistDrill extends Drill {
 
   constructor(
     g: ConstructorParameters<typeof Drill>[0],
-    protected readonly style: BotStyle = 'duel',
+    protected readonly p: DuelParams,
+    level: number,
   ) {
     super(g);
-    this.id = style === 'duel' ? 'duelist' : 'duelist-smooth';
-    this.title = style === 'duel' ? 'Duelist' : 'Duelist · Smooth';
+    this.level = level;
+    this.probe = new TrackingProbe(this.coach);
   }
 
   setup(): void {
@@ -54,8 +45,8 @@ export class DuelistDrill extends Drill {
   }
 
   protected spawn(bearing = -25 + Math.random() * 50): void {
-    const { x, z } = bearingXZ(bearing, 10 + Math.random() * 4);
-    this.target = this.g.spawnHumanoid(x, z, { style: this.style, lane: 5.5, near: 8, far: 15 });
+    const { x, z } = bearingXZ(bearing, (this.p.near + this.p.far) / 2);
+    this.target = this.g.spawnHumanoid(x, z, { style: this.p.style, lane: 5.5, near: this.p.near, far: this.p.far, tuning: this.p.tuning });
   }
 
   override update(dt: number): void {
@@ -97,19 +88,23 @@ export class DuelistDrill extends Drill {
 
   report(): DrillReport {
     const m = this.probe.meter;
+    const facts = this.probe.facts();
+    const d = facts.summary.delayMs;
     return {
       id: this.id,
       title: this.title,
+      level: this.level,
       score: Math.round(m.accuracy * 100),
       stats: [
         { label: 'Time on target', value: pct(m.accuracy), unit: '%', hint: 'While holding fire' },
-        { label: 'Mean error', value: m.meanError.toFixed(2), unit: '°' },
-        { label: 'Lag (+) / lead (−)', value: m.trail.toFixed(2), unit: '°' },
-        { label: 'Shot accuracy', value: pct(this.shots ? this.hits / this.shots : 0), unit: '%' },
-        { label: 'Crit rate', value: pct(this.hits ? this.heads / this.hits : 0), unit: '%' },
+        { label: 'Reaction to strafes', value: d === null ? '—' : String(Math.round(d)), unit: 'ms' },
+        { label: 'Behind (+) / ahead (−)', value: m.trail.toFixed(2), unit: '°' },
+        { label: 'Height vs chest', value: (-m.verticalBias).toFixed(2), unit: '°', hint: 'Negative = below' },
+        { label: 'Extra shakes / second', value: facts.summary.jitter.toFixed(1) },
         { label: 'Eliminations', value: String(this.kills) },
       ],
-      notes: trackingNotes(m.accuracy, m.trail, m.verticalBias),
+      notes: trackingFindings(facts).map((f) => f.title),
+      analytics: { tracking: facts },
     };
   }
 }
@@ -125,10 +120,6 @@ export class CrossfireDrill extends DuelistDrill {
   private movingTime = 0;
   private stillShots = 0;
   private toastCool = 0;
-
-  constructor(g: ConstructorParameters<typeof Drill>[0]) {
-    super(g, 'duel');
-  }
 
   private get moving(): boolean {
     return this.g.player.horizontalSpeed >= 2.5 || !this.g.player.onGround;
@@ -152,6 +143,7 @@ export class CrossfireDrill extends DuelistDrill {
         this.g.hud.flashToast('STANDING STILL · NO DAMAGE', 'warn');
         this.toastCool = 1;
       }
+      if (this.stillShots % 12 === 0) this.coach.nudge('Keep your feet moving — A, D, A, D.', 'fix');
     }
   }
 
@@ -170,12 +162,8 @@ export class CrossfireDrill extends DuelistDrill {
     const moving = this.elapsed > 0 ? this.movingTime / this.elapsed : 0;
     r.score = Math.round(this.probe.meter.accuracy * moving * 100);
     r.stats.splice(1, 0, { label: 'Time moving', value: pct(moving), unit: '%' });
-    r.stats.push({ label: 'Shots while still', value: String(this.stillShots) });
-    r.notes.unshift(
-      moving < 0.8
-        ? `You were planted ${pct(1 - moving)}% of the time. In Overwatch a standing target is a free headshot for the enemy — strafe while you shoot (A/D rhythm, crouch at close range).`
-        : 'You kept moving — your accuracy held while being a harder target yourself.',
-    );
+    r.stats.push({ label: 'Shots while standing still', value: String(this.stillShots) });
+    r.analytics = { ...r.analytics, movement: { moving } };
     return r;
   }
 }

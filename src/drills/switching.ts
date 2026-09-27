@@ -1,3 +1,4 @@
+import { switchingFindings } from '../core/coach';
 import { WEAPONS, type ShotResult } from '../core/game';
 import { mean } from '../core/metrics';
 import { bearingXZ } from '../world/arena';
@@ -21,8 +22,18 @@ export class TriadDrill extends Drill {
   private respawnT: number[] = [];
   private hudT = 0;
 
+  constructor(
+    g: ConstructorParameters<typeof Drill>[0],
+    private readonly p: { count: number; hp: number; duelShare: number; speed: number },
+    level: number,
+  ) {
+    super(g);
+    this.level = level;
+  }
+
   setup(): void {
-    for (const b of [-40, 0, 40]) this.spawn(b);
+    const spread = this.p.count >= 4 ? [-60, -20, 20, 60] : [-40, 0, 40];
+    for (const b of spread) this.spawn(b);
   }
 
   private spawn(bearing?: number): void {
@@ -35,8 +46,14 @@ export class TriadDrill extends Drill {
       }
     }
     const { x, z } = bearingXZ(b, 9 + Math.random() * 8);
-    const f = this.g.spawnHumanoid(x, z, { style: Math.random() < 0.6 ? 'duel' : 'smooth', lane: 3.5, near: 7, far: 18 });
-    f.hp = f.maxHp = 150;
+    const f = this.g.spawnHumanoid(x, z, {
+      style: Math.random() < this.p.duelShare ? 'duel' : 'smooth',
+      lane: 3.5,
+      near: 7,
+      far: 18,
+      tuning: { speed: this.p.speed },
+    });
+    f.hp = f.maxHp = this.p.hp;
   }
 
   override update(dt: number): void {
@@ -67,8 +84,11 @@ export class TriadDrill extends Drill {
     if (!s.figure) return;
     this.hits++;
     if (this.pending && s.figure !== this.lastKilled) {
-      this.switches.push((s.at - this.lastKillAt) * 1000);
+      const t = (s.at - this.lastKillAt) * 1000;
+      this.switches.push(t);
       this.pending = 0;
+      if (t > 900) this.coach.nudge('Pick your next target before this one dies.', 'fix');
+      else if (t < 400 && this.switches.length % 4 === 0) this.coach.nudge('Snappy switches!', 'good');
     }
   }
 
@@ -83,14 +103,12 @@ export class TriadDrill extends Drill {
   report(): DrillReport {
     const acc = this.shots ? this.hits / this.shots : 0;
     const sw = mean(this.switches);
-    const notes: string[] = [];
-    if (sw > 650) notes.push(`Switches average ${ms(sw)} ms. Pick your next target before the current one dies — glance, don't search.`);
-    else if (sw > 0) notes.push(`Switches average ${ms(sw)} ms — quick. Keep the switch a single, decisive movement.`);
-    if (acc < 0.35) notes.push('Low accuracy during switches usually means you start firing before you arrive. Arrive, then fire.');
-    notes.push('Priority rule of thumb: switch to the target closest to your crosshair unless another is much lower on health.');
+    const notes = switchingFindings({ switchMs: sw, acc, kills: this.kills }).map((f) => f.title);
     return {
       id: this.id,
       title: this.title,
+      level: this.level,
+      analytics: { switching: { switchMs: sw, acc, kills: this.kills } },
       score: Math.min(100, Math.round(this.kills * 5 * (0.5 + acc))),
       stats: [
         { label: 'Eliminations', value: String(this.kills) },

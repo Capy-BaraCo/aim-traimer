@@ -160,18 +160,27 @@ describe('flick analysis', () => {
 });
 
 describe('trial score', () => {
+  const section = { n: 8, timeMs: 600, hitRate: 1, acc: 0.8, landing: 1, tally: { overshoot: 2, undershoot: 2, clean: 4, total: 8 } };
+  const base = {
+    trackErr: 1,
+    trackTrail: 0,
+    trackDelayMs: 180,
+    short: section,
+    wide: { ...section, timeMs: 900 },
+    tally: { overshoot: 4, undershoot: 4, clean: 8, total: 16 },
+  };
+
   it('rewards better tracking under a tracking focus', () => {
-    const base = {
-      trackErr: 1,
-      trackTrail: 0,
-      flickTimeMs: 700,
-      flickHitRate: 1,
-      flickAcc: 0.8,
-      tally: { overshoot: 0, undershoot: 0, clean: 0, total: 0 },
-    };
     const good = trialScore({ ...base, trackAcc: 0.6 }, 'tracking');
     const bad = trialScore({ ...base, trackAcc: 0.4 }, 'tracking');
     expect(good).toBeGreaterThan(bad);
     expect(good).toBeLessThanOrEqual(100);
+  });
+
+  it('only scores the sections that were played', () => {
+    const onlyShort = trialScore({ ...base, trackAcc: null, wide: null }, 'balanced');
+    const worseTracking = trialScore({ ...base, trackAcc: 0.1, wide: null }, 'balanced');
+    expect(onlyShort).toBeGreaterThan(worseTracking);
+    expect(trialScore({ ...base, trackAcc: null, short: null, wide: null }, 'flick')).toBe(0);
   });
 });

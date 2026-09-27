@@ -2,9 +2,10 @@ import { Game } from '../core/game';
 import { cmPer360, edpi } from '../core/sens';
 import { store } from '../core/store';
 import type { Drill, DrillReport } from '../drills/drill';
+import { installTooltips } from './charts';
 import { $, actions, esc, h, stagger } from './dom';
 
-export type Route = 'home' | 'calibrate' | 'manual' | 'range' | 'tools' | 'settings';
+export type Route = 'home' | 'calibrate' | 'training' | 'manual' | 'logbook' | 'range' | 'tools' | 'settings';
 
 export interface Screen {
   el: HTMLElement;
@@ -14,12 +15,17 @@ export interface Screen {
 
 type ScreenFactory = (app: App, arg?: unknown) => Screen;
 
+/** Reading screens: the backdrop sits under a near-opaque scrim. */
+const HEAVY: Route[] = ['manual', 'settings', 'logbook', 'training'];
+
 const NAV: { route: Route; n: string; label: string }[] = [
   { route: 'calibrate', n: '01', label: 'CALIBRATE' },
-  { route: 'manual', n: '02', label: 'FIELD MANUAL' },
-  { route: 'range', n: '03', label: 'FREE RANGE' },
-  { route: 'tools', n: '04', label: 'INSTRUMENTS' },
-  { route: 'settings', n: '05', label: 'SETTINGS' },
+  { route: 'training', n: '02', label: 'TRAINING' },
+  { route: 'manual', n: '03', label: 'FIELD MANUAL' },
+  { route: 'logbook', n: '04', label: 'LOGBOOK' },
+  { route: 'range', n: '05', label: 'FREE RANGE' },
+  { route: 'tools', n: '06', label: 'INSTRUMENTS' },
+  { route: 'settings', n: '07', label: 'SETTINGS' },
 ];
 
 interface Launch {
@@ -68,6 +74,7 @@ export class App {
     this.brg = $(root, '.brg b');
 
     this.game = new Game($(root, '#scene'), this.ui);
+    installTooltips(this.ui);
     this.game.applySettings(store.settings);
     store.subscribe((p) => {
       if (this.game.mode !== 'play') this.game.applySettings(p.settings);
@@ -120,7 +127,13 @@ export class App {
     stagger(screen.el);
     requestAnimationFrame(() => screen.el.classList.add('enter'));
     this.spine.querySelectorAll<HTMLElement>('nav button').forEach((b) => b.classList.toggle('on', b.dataset.route === route));
-    this.ui.querySelector('.scrim')!.classList.toggle('heavy', route === 'manual' || route === 'settings');
+    this.ui.querySelector('.scrim')!.classList.toggle('heavy', HEAVY.includes(route));
+    this.syncBackdrop();
+  }
+
+  /** The 3D backdrop barely shows behind reading screens and overlays, so draw it less often there. */
+  private syncBackdrop(): void {
+    this.game.backdropFps = this.overlay || HEAVY.includes(this.route) ? 20 : 0;
   }
 
   /** Enter play mode. MUST be called from a click/keyboard handler: pointer lock needs a user gesture. */
@@ -158,6 +171,21 @@ export class App {
   closeOverlay(): void {
     this.overlay?.remove();
     this.overlay = null;
+    this.syncBackdrop();
+  }
+
+  /** Replace any open overlay with `el`. */
+  showOverlay(el: HTMLElement): void {
+    this.closeOverlay();
+    this.overlay = el;
+    this.ui.appendChild(el);
+    this.syncBackdrop();
+    el.querySelectorAll<HTMLElement>('.rise').forEach((r, i) => r.style.setProperty('--i', String(i)));
+  }
+
+  /** Re-render the current screen (e.g. after progress changed). */
+  refresh(): void {
+    this.go(this.route);
   }
 
   private showPause(): void {
@@ -199,6 +227,7 @@ export class App {
     });
     this.overlay = el;
     this.ui.appendChild(el);
+    this.syncBackdrop();
   }
 
   showReport(r: DrillReport, opts: { retry?: () => void; back?: () => void; extra?: string; best?: number | null; isBest?: boolean } = {}): void {
@@ -243,6 +272,7 @@ export class App {
     });
     this.overlay = el;
     this.ui.appendChild(el);
+    this.syncBackdrop();
   }
 
   get overlayEl(): HTMLElement | null {
@@ -253,22 +283,5 @@ export class App {
     const el = h(`<div class="toast">${esc(msg)}</div>`);
     this.ui.appendChild(el);
     setTimeout(() => el.remove(), 3600);
-  }
-
-  /** Standard run: play → report overlay with retry. */
-  runDrill(make: () => Drill, after?: (r: DrillReport) => string | void): void {
-    const go = () =>
-      this.play(
-        make,
-        (r) => {
-          this.endPlay();
-          const isBest = r.score > 0 && store.recordBest(r.id, r.score);
-          const best = store.get().bests[r.id] ?? null;
-          const extra = after?.(r) ?? '';
-          this.showReport(r, { retry: go, back: () => {}, extra, best, isBest });
-        },
-        undefined,
-      );
-    go();
   }
 }

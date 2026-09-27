@@ -6,7 +6,7 @@ import { crosshairSvg } from '../hud';
 
 const COLORS = ['#3dffc8', '#ffffff', '#ff4b1f', '#f7ff3c', '#ff3df2', '#27e0ff'];
 
-App.register('settings', () => {
+App.register('settings', (app) => {
   const el = h('<div class="tools settings-grid"></div>');
 
   const render = () => {
@@ -40,6 +40,7 @@ App.register('settings', () => {
         ${row('Field of view', 'Overwatch horizontal FOV at 16:9. Most players use 103.', range('fov', 80, 103, 1, s.fov))}
         ${row('Weapon model', '', sw('viewmodel', s.viewmodel))}
         ${row('Aim oscilloscope', 'Live error trace, bottom-right.', sw('showScope', s.showScope))}
+        ${row('Coach cues', 'Short tips during drills when the coach spots a pattern.', sw('coachCues', s.coachCues))}
         ${row('FPS counter', '', sw('showFps', s.showFps))}
       </section>
       <section class="panel glass span-7 rise">
@@ -59,7 +60,16 @@ App.register('settings', () => {
           ${row('Render scale', '', range('renderScale', 0.5, 1, 0.05, s.renderScale, (v) => `${Math.round(v * 100)}%`))}
           ${row('Volume', '', range('volume', 0, 1, 0.05, s.volume, (v) => `${Math.round(v * 100)}%`))}
         </div>
-        <div class="actions"><button class="btn ghost small" data-act="reset">Reset to defaults</button></div>
+        <div class="panel glass">
+          <h4><span>Your data</span><span>${store.get().sessions.length} runs saved</span></h4>
+          <p class="note" style="margin:0 0 14px">Stars, levels and your Logbook live only in this browser. Export a backup to move them to another PC or browser, or to keep them safe before clearing site data.</p>
+          <div class="actions">
+            <button class="btn small" data-act="export">Export backup <span class="arr">↓</span></button>
+            <button class="btn ghost small" data-act="import">Import backup</button>
+            <input type="file" accept="application/json,.json" data-file hidden>
+          </div>
+        </div>
+        <div class="actions"><button class="btn ghost small" data-act="reset">Reset settings to defaults</button></div>
       </section>`;
     el.querySelectorAll<HTMLInputElement>('input[type=range]').forEach(syncRange);
     el.querySelectorAll<HTMLElement>('.rise').forEach((r, i) => r.style.setProperty('--i', String(i)));
@@ -107,6 +117,24 @@ App.register('settings', () => {
       store.update((p) => (p.settings = structuredClone(DEFAULT_SETTINGS)));
       render();
     },
+    export: () => {
+      const url = URL.createObjectURL(new Blob([store.exportJson()], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `azimuth-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+    import: () => el.querySelector<HTMLInputElement>('[data-file]')?.click(),
+  });
+
+  el.addEventListener('change', async (e) => {
+    const t = e.target as HTMLInputElement;
+    if (!t.matches('[data-file]') || !t.files?.[0]) return;
+    const res = store.importJson(await t.files[0].text());
+    t.value = '';
+    app.toast(res.ok ? 'Backup restored: settings, stars and Logbook are back.' : res.reason);
+    if (res.ok) render();
   });
 
   render();
