@@ -4,6 +4,7 @@ import type { LiveCoach, TrackingFacts } from '../core/coach';
 import type { Game } from '../core/game';
 import { TrackingMeter, type AimSample } from '../core/metrics';
 import { angularRadiusDeg } from '../core/sens';
+import { store } from '../core/store';
 import type { Figure } from '../world/figure';
 
 const _p = new Vector3();
@@ -122,10 +123,6 @@ export function dirFrom(bearingDeg: number, pitchDeg: number, out = new Vector3(
   return out.set(Math.sin(b) * Math.cos(p), Math.sin(p), -Math.cos(b) * Math.cos(p));
 }
 
-/**
- * Spawn an orb roughly `minDeg`–`maxDeg` away from the current aim (total angular distance),
- * at a comfortable pitch, visible and above ground. Used for wide flicks and turns.
- */
 /** A proposed orb position: which way from the eye, and how far. */
 interface Candidate {
   dir: Vector3;
@@ -162,6 +159,10 @@ export function spawnOrbWhere(g: Game, radius: number, tries: number, propose: (
   return g.spawnOrb(eye.addScaledVector(dir, d), radius * (d / 10));
 }
 
+/**
+ * Spawn an orb roughly `minDeg`–`maxDeg` away from the current aim (total angular distance),
+ * at a comfortable pitch, visible and above ground. Used for wide flicks and turns.
+ */
 export function spawnFlickOrb(g: Game, minDeg: number, maxDeg: number, minDist: number, maxDist: number, radius: number): Figure {
   const aim = g.aimAngles();
   return spawnOrbWhere(g, radius, 30, () => {
@@ -199,3 +200,52 @@ export function spawnScreenOrb(g: Game, minDeg: number, maxDeg: number, minDist:
 
 /** Linear ramp across levels 1..10. */
 export const ramp = (level: number, a: number, b: number): number => a + ((b - a) * (Math.min(10, Math.max(1, level)) - 1)) / 9;
+
+/**
+ * A target's voice: a positional ping when it appears, then (optionally) a quieter beacon every
+ * `every` seconds until it is on screen — like hearing an enemy before you see them.
+ * `onPing` receives the sound's direction (0 = ahead, 90 = right, ±180 = behind).
+ */
+export class TargetSound {
+  private f: Figure | null = null;
+  private t = 0;
+
+  constructor(
+    private readonly every = 0,
+    private readonly opts: { force?: boolean; onPing?: (az: number, spawn: boolean) => void } = {},
+  ) {}
+
+  start(g: Game, f: Figure): void {
+    this.f = f;
+    this.t = this.every;
+    this.ping(g, true);
+  }
+
+  update(g: Game, dt: number): void {
+    const f = this.f;
+    if (!f || !this.every) return;
+    if (!f.alive || g.onScreen(f.position, 0.92)) {
+      this.f = null;
+      return;
+    }
+    this.t -= dt;
+    if (this.t <= 0) {
+      this.t += this.every;
+      this.ping(g, false);
+    }
+  }
+
+  stop(): void {
+    this.f = null;
+  }
+
+  private ping(g: Game, spawn: boolean): void {
+    const f = this.f;
+    if (!f) return;
+    if (this.opts.force || store.settings.targetSounds) {
+      if (spawn) g.audio.spawn(f.position);
+      else g.audio.beacon(f.position);
+    }
+    this.opts.onPing?.(g.audio.directionOf(f.position).az, spawn);
+  }
+}

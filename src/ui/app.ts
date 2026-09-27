@@ -1,3 +1,4 @@
+import type { FilmRoom } from './film';
 import { Game } from '../core/game';
 import { cmPer360, edpi } from '../core/sens';
 import { store } from '../core/store';
@@ -41,7 +42,9 @@ export class App {
   private readonly screens: HTMLElement;
   private readonly spine: HTMLElement;
   private readonly chip: HTMLElement;
-  private readonly ui: HTMLElement;
+  readonly ui: HTMLElement;
+  /** The film room, when one is open on top of everything. */
+  film: FilmRoom | null = null;
   private readonly brg: HTMLElement;
   private current: Screen | null = null;
   private overlay: HTMLElement | null = null;
@@ -117,6 +120,7 @@ export class App {
   go(route: Route, arg?: unknown): void {
     const f = App.registry.get(route);
     if (!f) return;
+    this.film?.close();
     this.closeOverlay();
     this.current?.destroy?.();
     this.route = route;

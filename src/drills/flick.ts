@@ -5,7 +5,7 @@ import { mean, speedScore, speedScoreShort } from '../core/metrics';
 import { mmForDegrees } from '../core/sens';
 import { store } from '../core/store';
 import type { Figure } from '../world/figure';
-import { dirFrom, FlickRecorder, spawnFlickOrb, spawnOrbWhere, spawnScreenOrb } from './common';
+import { dirFrom, FlickRecorder, spawnFlickOrb, spawnOrbWhere, spawnScreenOrb, TargetSound } from './common';
 import { Drill, ms, pct, type DrillReport } from './drill';
 
 export interface FlickParams {
@@ -42,6 +42,8 @@ export class FlickDrill extends Drill {
   override weapon = WEAPONS.rail;
   override movable = false;
   private readonly rec = new FlickRecorder();
+  /** Wide flicks start off screen: a positional ping says where, as a sound would in a match. */
+  private readonly sound = new TargetSound();
   private current: Figure | null = null;
   private shown = 0;
   private age = 0;
@@ -81,6 +83,7 @@ export class FlickDrill extends Drill {
       ? spawnScreenOrb(this.g, minDeg, maxDeg, minDist, maxDist, radius)
       : spawnFlickOrb(this.g, minDeg, maxDeg, minDist, maxDist, radius);
     this.rec.begin(this.g, this.current);
+    if (!this.p.screen) this.sound.start(this.g, this.current);
     this.shown++;
     this.age = 0;
   }

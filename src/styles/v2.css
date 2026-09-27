@@ -792,10 +792,9 @@
   border-color: var(--hair-2);
 }
 
+/* 8 cards: two wide flick cards, then two staggered rows of three. */
 .tcard:nth-child(1),
-.tcard:nth-child(2),
-.tcard:nth-child(6),
-.tcard:nth-child(7) {
+.tcard:nth-child(2) {
   grid-column: span 6;
 }
 
@@ -1259,4 +1258,145 @@
   .lb-charts > * {
     grid-area: auto;
   }
+}
+
+/* ---------------------------------------------------------------- sound direction (HUD) */
+
+.hud-sonar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.hud-sonar path {
+  fill: none;
+  stroke: var(--bone);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgb(14 12 10 / 0.9));
+  animation: sonar-fade 0.9s var(--ease) forwards;
+}
+
+.hud-sonar path.strong {
+  stroke: var(--signal);
+  stroke-width: 7;
+}
+
+@keyframes sonar-fade {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 0 400;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    stroke-dasharray: 400 0;
+  }
+}
+
+/* ---------------------------------------------------------------- audio check */
+
+.audio-check {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.ac-label {
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+}
+
+.ac-label small {
+  color: var(--dust);
+  font-size: 11.5px;
+}
+
+.ac-pad {
+  display: grid;
+  grid-template-columns: 1fr 64px 1fr;
+  grid-template-areas:
+    '. ahead .'
+    'left you right'
+    '. behind .';
+  gap: 8px;
+  align-items: center;
+  justify-items: center;
+  max-width: 360px;
+}
+
+.ac {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bone);
+  background: rgb(233 225 210 / 0.05);
+  border: 1px solid var(--hair-2);
+  padding: 9px 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.ac:hover,
+.ac:focus-visible {
+  border-color: var(--signal);
+}
+
+.ac.ping {
+  animation: ac-ping 0.6s var(--ease);
+}
+
+@keyframes ac-ping {
+  from {
+    background: var(--signal);
+    color: var(--ink);
+  }
+}
+
+.ac-ahead {
+  grid-area: ahead;
+}
+
+.ac-left {
+  grid-area: left;
+  justify-self: end;
+}
+
+.ac-right {
+  grid-area: right;
+  justify-self: start;
+}
+
+.ac-behind {
+  grid-area: behind;
+}
+
+/* You, seen from above: a head with a nose pointing "ahead". */
+.ac-you {
+  grid-area: you;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--bone);
+  position: relative;
+}
+
+.ac-you::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  translate: -50% 0;
+  border: 6px solid transparent;
+  border-bottom: 8px solid var(--signal);
 }

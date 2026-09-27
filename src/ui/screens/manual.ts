@@ -6,6 +6,8 @@ import { drillDef } from '../../drills/registry';
 import { CHAPTERS, type Chapter } from '../../guide/chapters';
 import { App } from '../app';
 import { actions, esc, h } from '../dom';
+import { LESSON_TITLE } from '../../film/lessons';
+import { openFilm } from '../film';
 import { openBriefing } from '../session';
 
 let lastSlug = CHAPTERS[0].slug;
@@ -80,6 +82,13 @@ function chapterHtml(c: Chapter, i: number): string {
         </nav>
       </div>
       <aside class="ch-aside">
+        ${
+          c.films?.length
+            ? `<div class="drill-card rise film-card"><div class="kicker">Film room</div><h4>Watch it happen</h4><p>Slow-motion replays with the right way next to them, explained step by step.</p><div class="film-demos">${c.films
+                .map((k) => `<button class="watch" data-act="film" data-kind="${k}">${esc(LESSON_TITLE[k])}</button>`)
+                .join('')}</div></div>`
+            : ''
+        }
         ${c.drills.map(drillCard).join('')}
         ${c.cta ? `<div class="drill-card rise"><div class="kicker">Next step</div><h4>${esc(c.cta.label)}</h4><p>Put this chapter to work.</p><button class="btn" data-act="cta" data-route="${c.cta.route}">Open <span class="arr">→</span></button></div>` : ''}
         <div class="panel glass rise"><h4><span>Controls</span></h4><p class="note" style="margin:0"><span class="kbd">WASD</span> move · <span class="kbd">SPACE</span> jump (hold to keep jumping) · <span class="kbd">C</span>/<span class="kbd">SHIFT</span> crouch · <span class="kbd">LMB</span> fire · <span class="kbd">ESC</span> pause</p></div>
@@ -122,6 +131,7 @@ App.register('manual', (app, arg) => {
         },
       ),
     cta: (b) => app.go(b.dataset.route as 'calibrate'),
+    film: (b) => openFilm(app, { kind: b.dataset.kind as keyof typeof LESSON_TITLE, source: 'An example flick', onPractise: (d) => openBriefing(app, d) }),
   });
 
   const unsub = store.subscribe(() => {

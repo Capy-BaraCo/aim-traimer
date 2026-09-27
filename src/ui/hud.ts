@@ -106,6 +106,7 @@ export class Hud {
         <canvas></canvas>
         <div class="hud-scope-legend"><span class="lg-yaw">ΔYAW</span><span class="lg-pitch">ΔPITCH</span><span class="lg-scale">±${SCOPE_RANGE}°</span></div>
       </div>
+      <svg class="hud-sonar" viewBox="-160 -160 320 320" width="320" height="320" aria-hidden="true"></svg>
       <div class="hud-center"></div>
       <div class="hud-sample"></div>
       <div class="hud-toast"></div>
@@ -211,6 +212,27 @@ export class Hud {
   clearCue(): void {
     this.cueTimer = 0;
     this.cueEl.classList.remove('on');
+    this.root.querySelector('.hud-sonar')!.replaceChildren();
+  }
+
+  /**
+   * Direction arc around the crosshair, like Overwatch's damage indicators: where a sound came from.
+   * `az`: 0 = ahead (top), 90 = right, ±180 = behind (bottom).
+   */
+  sonar(az: number, strong = true): void {
+    const svg = this.root.querySelector('.hud-sonar')!;
+    const r = 132;
+    const half = strong ? 16 : 11;
+    const p = (deg: number) => {
+      const a = ((deg - 90) * Math.PI) / 180;
+      return `${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`;
+    };
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    arc.setAttribute('d', `M ${p(az - half)} A ${r} ${r} 0 0 1 ${p(az + half)}`);
+    arc.setAttribute('class', strong ? 'strong' : '');
+    arc.addEventListener('animationend', () => arc.remove());
+    svg.appendChild(arc);
+    while (svg.childElementCount > 6) svg.firstElementChild?.remove();
   }
 
   hit(head: boolean, kill: boolean): void {

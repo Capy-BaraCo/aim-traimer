@@ -3,6 +3,7 @@ import type { Game } from '../core/game';
 import { MAX_LEVEL, type Thresholds } from '../core/progress';
 import type { StyleTuning } from '../world/brain';
 import type { Drill } from './drill';
+import { EchoDrill, type EchoParams } from './echo';
 import { FlickDrill, PinDrill, type FlickParams } from './flick';
 import { CornerWatchDrill } from './placement';
 import { TriadDrill } from './switching';
@@ -97,6 +98,35 @@ const SNAP: FlickParams[] = [
   flickRow(0.25, 45, 160, 1.7, 20, false),
 ];
 
+// Echo: the training wheels (repeating beacon, direction arc) come off as you level up.
+const echoRow = (radius: number, minDeg: number, maxDeg: number, limit: number, beacon: number, arc: EchoParams['arc']): EchoParams => ({
+  radius,
+  minDeg,
+  maxDeg,
+  limit,
+  count: 14,
+  beacon,
+  arc,
+  minDist: 10,
+  maxDist: 17,
+});
+
+const ECHO: EchoParams[] = [
+  echoRow(0.44, 70, 140, 3.4, 0.4, 'all'),
+  echoRow(0.42, 80, 150, 3.2, 0.45, 'all'),
+  echoRow(0.4, 90, 160, 3.0, 0.5, 'spawn'),
+  echoRow(0.38, 90, 170, 2.9, 0.6, 'spawn'),
+  echoRow(0.36, 90, 175, 2.8, 0.7, 'none'),
+  echoRow(0.34, 100, 178, 2.6, 0.9, 'none'),
+  echoRow(0.32, 100, 180, 2.5, 1.2, 'none'),
+  echoRow(0.3, 110, 180, 2.4, 0, 'none'),
+  echoRow(0.28, 110, 180, 2.2, 0, 'none'),
+  echoRow(0.26, 120, 180, 2.0, 0, 'none'),
+];
+
+const echoLabel = (p: EchoParams) =>
+  `${p.minDeg}–${p.maxDeg}° round · ${p.beacon ? `ticks every ${p.beacon.toFixed(1)} s` : 'one ping only'}${p.arc === 'all' ? ' · arc shows every sound' : p.arc === 'spawn' ? ' · arc on the first ping' : ''} · ${p.limit.toFixed(1)} s`;
+
 const size = (r: number) => (r >= 0.34 ? 'Big' : r >= 0.28 ? 'Medium' : r >= 0.22 ? 'Small' : 'Head-sized');
 const flickLabel = (p: FlickParams) => `${size(p.radius)} targets · ${p.minDeg}–${p.maxDeg}° away · ${p.limit.toFixed(1)} s each`;
 
@@ -174,6 +204,21 @@ export const DRILL_DEFS: DrillDef[] = [
     stars: [45, 60, 75],
     levels: SNAP.map(flickLabel),
     make: (g, level) => new FlickDrill(g, 'snap', 'Snap', 'WIDE FLICKS', SNAP[L(level) - 1], L(level)),
+  },
+  {
+    id: 'echo',
+    name: 'Echo',
+    skill: 'Sound awareness',
+    kicker: 'SOUND AWARENESS',
+    chapter: 'listening',
+    oneLiner: 'Targets appear beside and behind you. Listen, turn the short way, flick.',
+    job: ['Put headphones on.', 'When you hear the ping, turn toward it straight away — the short way round.', 'Stop on the target and click.'],
+    scoring: 'Hits and speed, with a bonus for turning the right way first.',
+    measures: ['Whether your first turn went the short way', 'How soon after the sound you started turning', 'Sounds in front vs. behind: which fool you'],
+    tips: ['Sounds behind you are duller than sounds in front.', 'Start turning on the sound — your eyes will catch the target on the way.'],
+    stars: [35, 50, 65],
+    levels: ECHO.map(echoLabel),
+    make: (g, level) => new EchoDrill(g, ECHO[L(level) - 1], L(level)),
   },
   {
     id: 'pin',

@@ -3,9 +3,9 @@
  * Every finding answers three questions a beginner has: what happened, why it matters, what to try.
  */
 
-import type { FlickRecord, FlickSummary, TrackingSummary } from './analytics';
+import type { EchoSummary, FlickRecord, FlickSummary, TrackingSummary } from './analytics';
 
-export type DrillId = 'duelist' | 'blink' | 'snap' | 'pin' | 'triad' | 'corner' | 'crossfire';
+export type DrillId = 'duelist' | 'blink' | 'snap' | 'echo' | 'pin' | 'triad' | 'corner' | 'crossfire';
 
 export interface Finding {
   id: string;
@@ -405,6 +405,54 @@ export function switchingFindings(w: { switchMs: number; acc: number; kills: num
 }
 
 /** Pick the most useful things to say: one strength, up to two fixes, and a next drill. */
+/** Hearing: did the sound send you the right way, and quickly? */
+export function hearingFindings(e: EchoSummary): Finding[] {
+  const out: Finding[] = [];
+  if (e.judged >= 5) {
+    const wrong = e.judged - e.correct;
+    if (e.rate < 0.8)
+      out.push({
+        id: 'wrong-way',
+        kind: 'fix',
+        weight: 0.7 + (0.8 - e.rate),
+        title: 'You turn the wrong way',
+        body: `On ${wrong} of ${e.judged} sounds your first turn went away from the target — the long way round. That can double the time it takes to face them.`,
+        tip: 'Do the Audio check in Settings with your headphones: "Left" must sound left. Then turn toward the ear that hears the sound first and loudest.',
+        drill: 'echo',
+      });
+    else if (e.rate >= 0.9)
+      out.push({
+        id: 'good-ears',
+        kind: 'good',
+        weight: 0.65,
+        title: 'Your ears point you the right way',
+        body: `${e.correct} of ${e.judged} first turns went the short way round. You trust the sound — that's the skill.`,
+        tip: 'Next: start turning even sooner, the moment you hear it.',
+      });
+    if (e.behind.n >= 3 && e.front.n >= 3 && e.behind.rate < 0.7 && e.front.rate - e.behind.rate > 0.2)
+      out.push({
+        id: 'behind-confusion',
+        kind: 'fix',
+        weight: 0.75,
+        title: 'Sounds behind you fool you',
+        body: `In front of you, your first turn is right ${pct(e.front.rate)} of the time; behind you only ${pct(e.behind.rate)}. Front and back are the hardest directions for everyone's ears.`,
+        tip: "A sound behind you is duller and more centred. When you hear that, turn a big half-circle toward whichever ear it leans to — don't search.",
+        drill: 'echo',
+      });
+  }
+  if (ok(e.turnMs) && e.n >= 5 && e.turnMs > 420)
+    out.push({
+      id: 'wait-to-see',
+      kind: 'fix',
+      weight: 0.55 + Math.min(0.4, (e.turnMs - 420) / 800),
+      title: 'You wait to see before you turn',
+      body: `You start turning about ${ms(e.turnMs)} after the sound. Your ears already know the way before your eyes do.`,
+      tip: 'Start turning the instant you hear it, even before you are sure. Your eyes will catch the target on the way round.',
+      drill: 'echo',
+    });
+  return out;
+}
+
 export function feedback(findings: readonly Finding[]): { good: Finding | null; fixes: Finding[]; next: DrillId | null } {
   const sorted = [...findings].sort((a, b) => b.weight - a.weight);
   const fixes = sorted.filter((f) => f.kind === 'fix').slice(0, 2);

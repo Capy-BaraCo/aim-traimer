@@ -44,6 +44,10 @@ export interface Settings {
   viewmodel: boolean;
   /** Real-time coaching cues during drills. */
   coachCues: boolean;
+  /** HRTF 3D audio for headphones; off = plain stereo panning for speakers. */
+  spatialAudio: boolean;
+  /** Positional sounds when targets appear (Snap, Echo, calibration wide flicks). */
+  targetSounds: boolean;
   /** Which sections a PSA sample contains. */
   calSections: { track: boolean; short: boolean; wide: boolean };
 }
@@ -68,6 +72,15 @@ export interface TrackSnapshot {
   jitter: number;
 }
 
+/** One Echo run, boiled down. Rates are 0..1 (NaN when there was nothing to judge). */
+export interface HearingSnapshot {
+  at: string;
+  rate: number;
+  front: number;
+  behind: number;
+  turnMs: number;
+}
+
 export interface PlacementSnapshot {
   at: string;
   error: number;
@@ -85,6 +98,7 @@ export interface Profile {
   flickLog: FlickRecord[];
   trackLog: TrackSnapshot[];
   placementLog: PlacementSnapshot[];
+  hearLog: HearingSnapshot[];
   /** Days (YYYY-MM-DD) with at least one completed drill. */
   days: string[];
 }
@@ -113,6 +127,8 @@ export const DEFAULT_SETTINGS: Settings = {
   blind: true,
   viewmodel: true,
   coachCues: true,
+  spatialAudio: true,
+  targetSounds: true,
   calSections: { track: true, short: true, wide: true },
 };
 
@@ -128,6 +144,7 @@ const freshProfile = (): Profile => ({
   flickLog: [],
   trackLog: [],
   placementLog: [],
+  hearLog: [],
   days: [],
 });
 
@@ -151,6 +168,7 @@ function normalise(parsed: Partial<Profile>): Profile {
     flickLog: arr(parsed.flickLog),
     trackLog: arr(parsed.trackLog),
     placementLog: arr(parsed.placementLog),
+    hearLog: arr(parsed.hearLog),
     days: arr(parsed.days),
   };
 }
@@ -234,7 +252,12 @@ class Store {
     score: number,
     thresholds: Thresholds,
     maxLevel: number,
-    extras: { flicks?: FlickRecord[]; track?: Omit<TrackSnapshot, 'at' | 'drill'>; placement?: Omit<PlacementSnapshot, 'at'> } = {},
+    extras: {
+      flicks?: FlickRecord[];
+      track?: Omit<TrackSnapshot, 'at' | 'drill'>;
+      placement?: Omit<PlacementSnapshot, 'at'>;
+      hearing?: Omit<HearingSnapshot, 'at'>;
+    } = {},
   ): CommitResult {
     let result!: CommitResult;
     this.update((p) => {
@@ -251,6 +274,11 @@ class Store {
       if (extras.flicks?.length) {
         p.flickLog.push(...extras.flicks.map(slimFlick));
         if (p.flickLog.length > 300) p.flickLog.splice(0, p.flickLog.length - 300);
+        // Replays only need recent flicks; older ones keep their numbers but drop the timed path.
+        for (let i = 0; i < p.flickLog.length - 80; i++) {
+          p.flickLog[i].trace = undefined;
+          p.flickLog[i].shots = undefined;
+        }
       }
       if (extras.track) {
         p.trackLog.push({ at, drill, ...extras.track });
@@ -259,6 +287,10 @@ class Store {
       if (extras.placement) {
         p.placementLog.push({ at, ...extras.placement });
         if (p.placementLog.length > 120) p.placementLog.splice(0, p.placementLog.length - 120);
+      }
+      if (extras.hearing) {
+        p.hearLog.push({ at, ...extras.hearing });
+        if (p.hearLog.length > 120) p.hearLog.splice(0, p.hearLog.length - 120);
       }
       p.bests[drill] = Math.max(p.bests[drill] ?? 0, score);
       result = { ...outcome, rankBefore: rankFor(before).name, rankAfter: rankFor(after).name, totalStars: after };

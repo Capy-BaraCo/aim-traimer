@@ -3,7 +3,7 @@ import { WEAPONS, type ShotResult } from '../core/game';
 import { trialScore, type Focus, type SectionFlickMetrics, type TrialMetrics } from '../core/metrics';
 import { bearingXZ } from '../world/arena';
 import type { Figure } from '../world/figure';
-import { FlickRecorder, spawnFlickOrb, spawnScreenOrb, TrackingProbe } from './common';
+import { FlickRecorder, spawnFlickOrb, spawnScreenOrb, TargetSound, TrackingProbe } from './common';
 import { Drill, ms, pct, type DrillReport } from './drill';
 
 export type Section = 'track' | 'short' | 'wide';
@@ -57,6 +57,7 @@ export class CalibrationTrial extends Drill {
   private readonly plan: { track: number; short: number; wide: number };
   private readonly probe: TrackingProbe;
   private readonly rec = new FlickRecorder();
+  private readonly sound = new TargetSound();
   private target: Figure | null = null;
   private orb: Figure | null = null;
   private shownInPhase = 0;
@@ -187,6 +188,7 @@ export class CalibrationTrial extends Drill {
         ? spawnScreenOrb(this.g, 5, 26, 11, 17, RADIUS.short)
         : spawnFlickOrb(this.g, 35, 130, 10, 18, RADIUS.wide);
     this.rec.begin(this.g, this.orb);
+    if (ph === 'wide') this.sound.start(this.g, this.orb);
     this.shownInPhase++;
     this.age = 0;
   }

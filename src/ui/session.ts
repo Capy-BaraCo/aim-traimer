@@ -1,12 +1,13 @@
 /**
  * The practice loop: briefing → drill → debrief (stars, unlocks, coach, charts) → next step.
- * Also the Daily Warm-up, which chains six drills at your current levels.
+ * Also the Daily Warm-up, which chains a drill per skill at your current levels.
  */
 
-import { summariseFlicks } from '../core/analytics';
+import { summariseEcho, summariseFlicks, type DirSector, type FlickRecord } from '../core/analytics';
 import {
   feedback,
   flickFindings,
+  hearingFindings,
   placementFindings,
   switchingFindings,
   trackingFindings,
@@ -19,12 +20,15 @@ import type { DrillReport } from '../drills/drill';
 import { DRILL_DEFS, drillDef, type DrillDef } from '../drills/registry';
 import type { App } from './app';
 import * as C from './charts';
+import { canFilm, openFilm } from './film';
+import { lessonKindFor } from '../film/lessons';
 import { actions, esc, h } from './dom';
 
 /** Everything the coach can say about one run. */
 export function findingsFor(r: DrillReport): Finding[] {
   const a = r.analytics;
   const out: Finding[] = [];
+  if (a?.hearing?.length) out.push(...hearingFindings(summariseEcho(a.hearing)));
   if (a?.flicks?.length) out.push(...flickFindings(summariseFlicks(a.flicks), a.flickContext ?? 'mixed'));
   if (a?.tracking) out.push(...trackingFindings(a.tracking));
   if (a?.placement) out.push(...placementFindings(a.placement));
@@ -58,6 +62,12 @@ function extrasFrom(r: DrillReport) {
         }
       : undefined,
     placement: a?.placement ? { error: a.placement.error, vertical: a.placement.vertical } : undefined,
+    hearing: a?.hearing?.length
+      ? (() => {
+          const e = summariseEcho(a.hearing);
+          return { rate: e.rate, front: e.front.rate, behind: e.behind.rate, turnMs: e.turnMs };
+        })()
+      : undefined,
   };
 }
 
@@ -155,13 +165,25 @@ function verdict(stars: number): string {
   ][stars];
 }
 
-function findingCard(f: Finding): string {
+const dirOf = (f: Finding): DirSector | undefined => (f.id.startsWith('dir-') ? (f.id.slice(4) as DirSector) : undefined);
+
+/** A coach card; with `flicks`, findings about flicks get a "Watch it" replay button. */
+export function findingCard(f: Finding, flicks?: readonly FlickRecord[]): string {
+  const watch = flicks && canFilm(lessonKindFor(f.id), flicks, dirOf(f));
   return `<article class="finding ${f.kind}">
     <div class="f-kind">${f.kind === 'good' ? '✔ What went well' : '✖ Work on this'}</div>
     <h4>${esc(f.title)}</h4>
     ${f.body ? `<p>${esc(f.body)}</p>` : ''}
     ${f.tip ? `<p class="f-tip"><b>Try this:</b> ${esc(f.tip)}</p>` : ''}
+    ${watch ? `<button class="watch" data-act="film" data-fid="${esc(f.id)}">${f.kind === 'good' ? 'Watch your best' : 'Watch it'}</button>` : ''}
   </article>`;
+}
+
+/** Open the film room for a finding, picking examples from `flicks`. */
+export function filmFinding(app: App, f: Finding, flicks: readonly FlickRecord[], source: string): void {
+  const kind = lessonKindFor(f.id);
+  if (!kind) return;
+  openFilm(app, { kind, records: flicks, dir: dirOf(f), source, tip: f.tip || undefined, drill: f.drill, onPractise: (d) => openBriefing(app, d) });
 }
 
 function chartsFor(r: DrillReport): string {
@@ -169,6 +191,7 @@ function chartsFor(r: DrillReport): string {
   if (a?.flicks?.length) {
     const s = summariseFlicks(a.flicks);
     return `<div class="db-charts">
+      ${a.hearing?.length ? C.compassChart(a.hearing) : ''}
       ${C.landingMap(a.flicks)}
       <div class="chart-pair">${C.directionChart(s)}${C.speedShape(s)}</div>
       ${C.rangeBars(s)}
@@ -230,7 +253,7 @@ export function showDebrief(app: App, def: DrillDef, level: number, r: DrillRepo
           <div class="kicker">Debrief</div>
           <h3 class="display">${esc(def.name)}</h3>
           <p class="lede">${verdict(c.stars)}</p>
-          <div class="findings">${[fb.good, ...fb.fixes].filter((f): f is Finding => !!f).map(findingCard).join('') || '<p class="note">Not enough data this run for the coach — play a full level.</p>'}</div>
+          <div class="findings">${[fb.good, ...fb.fixes].filter((f): f is Finding => !!f).map((f) => findingCard(f, r.analytics?.flicks)).join('') || '<p class="note">Not enough data this run for the coach — play a full level.</p>'}</div>
           ${
             next
               ? `<div class="db-next"><div><div class="kicker plain">Recommended next</div><b>${esc(next.name)}</b> <span class="muted">level ${levelFor(next.id)} · ${esc(next.skill)}</span></div><button class="btn small" data-act="next" data-id="${next.id}">Open <span class="arr">→</span></button></div>`
@@ -250,13 +273,17 @@ export function showDebrief(app: App, def: DrillDef, level: number, r: DrillRepo
       app.refresh();
     },
     next: (b) => openBriefing(app, b.dataset.id as DrillId),
+    film: (b) => {
+      const f = [fb.good, ...fb.fixes].find((x) => x?.id === b.dataset.fid);
+      if (f && r.analytics?.flicks) filmFinding(app, f, r.analytics.flicks, `From this ${def.name} run`);
+    },
   });
   app.showOverlay(el);
 }
 
 // ------------------------------------------------------------------------------------ daily
 
-export const DAILY: DrillId[] = ['duelist', 'blink', 'snap', 'triad', 'pin', 'crossfire'];
+export const DAILY: DrillId[] = ['duelist', 'blink', 'snap', 'echo', 'triad', 'pin', 'crossfire'];
 
 interface DailyResult {
   def: DrillDef;
@@ -290,6 +317,7 @@ export function runDaily(app: App): void {
 function showDailySummary(app: App, results: DailyResult[]): void {
   const all = results.flatMap((x) => findingsFor(x.report));
   const fb = feedback(all);
+  const flicks = results.flatMap((x) => x.report.analytics?.flicks ?? []);
   const gained = results.reduce((s, x) => s + x.commit.starsGained, 0);
   const st = streak(store.get().days);
   const el = h(`
@@ -317,7 +345,7 @@ function showDailySummary(app: App, results: DailyResult[]): void {
               .join('')}
           </tbody></table>
           <h5 class="db-h">Tomorrow, focus on</h5>
-          <div class="findings">${fb.fixes.map(findingCard).join('') || '<p class="note">Nothing stood out. Push a level higher tomorrow.</p>'}</div>
+          <div class="findings">${fb.fixes.map((f) => findingCard(f, flicks)).join('') || '<p class="note">Nothing stood out. Push a level higher tomorrow.</p>'}</div>
         </section>
       </div>
     </div>`);
@@ -329,6 +357,10 @@ function showDailySummary(app: App, results: DailyResult[]): void {
     back: () => {
       app.closeOverlay();
       app.refresh();
+    },
+    film: (b) => {
+      const f = fb.fixes.find((x) => x.id === b.dataset.fid);
+      if (f) filmFinding(app, f, flicks, "From today's warm-up");
     },
   });
   app.showOverlay(el);

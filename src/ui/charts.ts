@@ -7,7 +7,7 @@
  * Series colours were validated for CVD separation and contrast on both surfaces.
  */
 
-import { BUCKET_LABEL, type FlickRecord, type FlickSummary, type TrackingPoint } from '../core/analytics';
+import { BUCKET_LABEL, echoCorrect, EITHER_WAY_DEG, type EchoRecord, type FlickRecord, type FlickSummary, type TrackingPoint } from '../core/analytics';
 import { esc } from './dom';
 
 export type Surface = 'dark' | 'light';
@@ -335,6 +335,65 @@ export function placementChart(points: readonly { x: number; y: number }[], surf
     body += `<g class="mark" ${tip(`Peek ${i + 1}: crosshair ${Math.abs(p.x).toFixed(1)}° ${p.x >= 0 ? 'right' : 'left'} and ${Math.abs(p.y).toFixed(1)}° ${p.y >= 0 ? 'above' : 'below'} the head`)}><circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="11" fill="transparent"/><circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="4.5" fill="${t.short}" stroke="${t.surface}" stroke-width="2"/></g>`;
   });
   return `<figure class="chart-fig"><figcaption>Where your crosshair was when each head appeared</figcaption>${svg(W, H, body, 'Crosshair placement')}</figure>`;
+}
+
+/**
+ * Echo compass, seen from above: you in the middle facing up, one dot per sound at the direction it
+ * came from. Colour = which way your first turn went.
+ */
+export function compassChart(records: readonly EchoRecord[], surface: Surface = 'dark'): string {
+  const t = THEMES[surface];
+  if (!records.length) return '';
+  const W = 340;
+  const H = 300;
+  const cx = W / 2;
+  const cy = H / 2 + 4;
+  const R = 108;
+  const at = (deg: number, r: number) => {
+    const a = ((deg - 90) * Math.PI) / 180;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r] as const;
+  };
+  // The dead-behind wedge where either way round is fine.
+  const [ax, ay] = at(180 - (180 - EITHER_WAY_DEG), R + 16);
+  const [bx, by] = at(180 + (180 - EITHER_WAY_DEG), R + 16);
+  let body = `<path d="M ${cx} ${cy} L ${ax.toFixed(1)} ${ay.toFixed(1)} A ${R + 16} ${R + 16} 0 0 1 ${bx.toFixed(1)} ${by.toFixed(1)} Z" fill="${t.band}"/>`;
+  body += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${t.muted}" stroke-width="1"/>`;
+  body += `<circle cx="${cx}" cy="${cy}" r="${R / 2}" fill="none" stroke="${t.grid}" stroke-width="1"/>`;
+  body += `<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="${t.grid}"/><line x1="${cx}" y1="${cy - R}" x2="${cx}" y2="${cy + R}" stroke="${t.grid}"/>`;
+  body += text(cx, cy - R - 12, 'AHEAD', t.ink, 'middle');
+  body += text(cx, cy + R + 22, 'BEHIND', t.muted, 'middle');
+  body += text(cx + R + 10, cy + 4, 'RIGHT', t.muted, 'start');
+  body += text(cx - R - 10, cy + 4, 'LEFT', t.muted, 'end');
+  // You: a head with a nose, facing ahead.
+  body += `<circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="${t.ink}" stroke-width="2"/><path d="M ${cx - 5} ${cy - 10} L ${cx} ${cy - 19} L ${cx + 5} ${cy - 10}" fill="${t.ink}"/>`;
+  const sorted = [...records].sort((a, b) => a.rel - b.rel);
+  let prev = -999;
+  let lane = 0;
+  for (const r of sorted) {
+    lane = r.rel - prev < 9 ? (lane + 1) % 3 : 0;
+    prev = r.rel;
+    const ok = echoCorrect(r);
+    const col = ok === null ? t.neutral : ok ? t.under : t.over;
+    const [x, y] = at(r.rel, R - lane * 13);
+    const where = Math.abs(r.rel) >= EITHER_WAY_DEG ? 'dead behind you' : `${Math.round(Math.abs(r.rel))}° to your ${r.rel > 0 ? 'right' : 'left'}`;
+    const turn = !r.turnDir ? 'you never turned' : ok === null ? `you turned ${r.turnDir > 0 ? 'right' : 'left'} (either way is fine)` : ok ? `you turned the short way after ${Math.round(r.turnMs ?? 0)} ms` : `you turned the LONG way (${r.turnDir > 0 ? 'right' : 'left'})`;
+    body += `<g class="mark" ${tip(`Sound ${where} · ${turn} · ${r.hit ? `hit in ${Math.round(r.totalMs)} ms` : 'missed'}`)}><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="11" fill="transparent"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${r.hit ? col : 'none'}" stroke="${r.hit ? t.surface : col}" stroke-width="2"/></g>`;
+  }
+  const table = `<details class="chart-table"><summary>Show as table</summary><table><thead><tr><th>#</th><th>Sound from</th><th>First turn</th><th>Turn started</th><th>Result</th></tr></thead><tbody>${records
+    .map((r, i) => {
+      const ok = echoCorrect(r);
+      return `<tr><td>${i + 1}</td><td>${Math.round(Math.abs(r.rel))}° ${r.rel >= 0 ? 'right' : 'left'}</td><td>${!r.turnDir ? '—' : ok === null ? 'either' : ok ? 'short way' : 'long way'}</td><td>${r.turnMs !== null ? `${Math.round(r.turnMs)} ms` : '—'}</td><td>${r.hit ? `${Math.round(r.totalMs)} ms` : 'miss'}</td></tr>`;
+    })
+    .join('')}</tbody></table></details>`;
+  return `<figure class="chart-fig" data-chart="compass"><figcaption>Where each sound came from</figcaption>${svg(W, H, `<g font-size="11">${body}</g>`, 'Sound directions and your first turn')}${legend(
+    [
+      { color: t.under, label: 'turned the short way' },
+      { color: t.over, label: 'turned the long way' },
+      { color: t.neutral, label: 'dead behind: either way' },
+      { color: 'transparent', label: 'hollow = missed' },
+    ],
+    t,
+  )}${table}</figure>`;
 }
 
 /** Aim fingerprint: 0..1 per skill. */

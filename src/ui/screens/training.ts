@@ -38,7 +38,8 @@ App.register('training', (app) => {
     </article>`;
   };
 
-  const order: DrillId[] = ['blink', 'snap', 'duelist', 'corner', 'triad', 'pin', 'crossfire'];
+  const order: DrillId[] = ['blink', 'snap', 'echo', 'duelist', 'crossfire', 'corner', 'triad', 'pin'];
+  const count = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'][DAILY.length] ?? String(DAILY.length);
   const el = h(`
     <div class="training">
       <header class="tr-head">
@@ -58,7 +59,7 @@ App.register('training', (app) => {
       <section class="daily-cta glass rise">
         <div>
           <div class="kicker">Daily warm-up</div>
-          <h3>Six drills, one button, about five minutes.</h3>
+          <h3>${count} drills, one button, about six minutes.</h3>
           <p class="note" style="margin:0">${DAILY.map((d) => DRILL_DEFS.find((x) => x.id === d)!.name).join(' → ')} · each at your current level · ${today ? `${today} run${today > 1 ? 's' : ''} today` : 'not done today'}</p>
         </div>
         <button class="btn" data-act="daily">Start warm-up <span class="arr">→</span></button>

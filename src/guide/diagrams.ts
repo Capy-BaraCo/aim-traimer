@@ -259,27 +259,67 @@ export function movement(): string {
 }
 
 export function routine(): string {
-  const segs: [string, number][] = [
-    ['DUELIST · SMOOTH', 2],
-    ['DUELIST', 2],
-    ['SNAP', 2],
-    ['TRIAD', 2],
-    ['PIN', 1],
-    ['CROSSFIRE', 1],
+  // The Daily warm-up in Training: one drill per skill, each ~45 s including its countdown.
+  const segs: [string, string][] = [
+    ['DUELIST', 'track'],
+    ['BLINK', 'short'],
+    ['SNAP', 'wide'],
+    ['ECHO', 'hear'],
+    ['TRIAD', 'switch'],
+    ['PIN', 'precise'],
+    ['CROSSFIRE', 'move'],
   ];
   const x0 = 30;
   const x1 = 610;
-  const unit = (x1 - x0) / 10;
-  let x = x0;
+  const w = (x1 - x0) / segs.length;
   let body = '';
-  segs.forEach(([name, m], i) => {
-    const w = m * unit;
-    body += `<rect x="${x}" y="70" width="${w - 4}" height="60" class="${i % 2 ? 'f-bone' : 'f-sig'}" opacity="${i % 2 ? 0.85 : 0.9}"/>`;
-    body += t(x + 8, 92, name, 'ink');
-    body += t(x + 8, 120, `${m} MIN`, 'ink');
-    x += w;
+  segs.forEach(([name, skill], i) => {
+    const x = x0 + i * w;
+    body += `<rect x="${x}" y="64" width="${w - 4}" height="66" class="${i % 2 ? 'f-bone' : 'f-sig'}" opacity="${i % 2 ? 0.85 : 0.9}"/>`;
+    body += t(x + 7, 86, name, 'ink');
+    body += t(x + 7, 118, skill.toUpperCase(), 'ink');
   });
-  for (let m = 0; m <= 10; m++) body += `<line x1="${x0 + m * unit}" y1="140" x2="${x0 + m * unit}" y2="${m % 5 ? 146 : 152}" class="s-line"/>${m % 5 ? '' : t(x0 + m * unit, 168, `${m}:00`, '', 'middle')}`;
-  body += t(x0, 40, 'THE DAILY 10 — TRACK → FLICK → SWITCH → PRECISION → MOVE');
+  const perMin = (x1 - x0) / 5.25;
+  for (let m = 0; m <= 5; m++) body += `<line x1="${x0 + m * perMin}" y1="140" x2="${x0 + m * perMin}" y2="148" class="s-line"/>${t(x0 + m * perMin, 166, `${m}:00`, '', 'middle')}`;
+  body += t(x0, 40, 'THE DAILY WARM-UP — ONE DRILL PER SKILL, ABOUT 6 MINUTES');
   return svg(190, body);
+}
+
+/** Hearing from above: left/right is easy (timing + loudness), front/back is hard (tone only). */
+export function hearing(): string {
+  const cx = 190;
+  const cy = 140;
+  const waves = (x: number, y: number, dir: number, cls: string) =>
+    [14, 26, 38]
+      .map((r) => {
+        const a0 = dir - 0.6;
+        const a1 = dir + 0.6;
+        return `<path d="M ${(x + Math.cos(a0) * r).toFixed(1)} ${(y + Math.sin(a0) * r).toFixed(1)} A ${r} ${r} 0 0 1 ${(x + Math.cos(a1) * r).toFixed(1)} ${(y + Math.sin(a1) * r).toFixed(1)}" class="${cls}" stroke-width="2" fill="none"/>`;
+      })
+      .join('');
+  return svg(
+    280,
+    `
+    <line x1="${cx}" y1="30" x2="${cx}" y2="250" class="s-hair" stroke-dasharray="3 5"/>
+    <circle cx="${cx}" cy="${cy}" r="34" class="s-bone" stroke-width="2" fill="none"/>
+    <path d="M ${cx - 9} ${cy - 32} L ${cx} ${cy - 48} L ${cx + 9} ${cy - 32}" class="f-bone"/>
+    <ellipse cx="${cx - 36}" cy="${cy}" rx="5" ry="10" class="f-bone"/>
+    <ellipse cx="${cx + 36}" cy="${cy}" rx="5" ry="10" class="f-bone"/>
+    <circle cx="44" cy="${cy}" r="9" class="f-sig"/>
+    ${waves(44, cy, 0, 's-sig')}
+    ${t(44, cy + 34, 'SOUND', 'sig', 'middle')}
+    <circle cx="${cx}" cy="262" r="8" class="s-cob" stroke-width="2" fill="none"/>
+    ${t(cx + 16, 266, 'BEHIND?', 'cob')}
+    <circle cx="${cx}" cy="22" r="8" class="s-cob" stroke-width="2" fill="none"/>
+    ${t(cx + 16, 26, 'AHEAD?', 'cob')}
+    ${t(318, 62, 'LEFT ↔ RIGHT · EASY', 'sig')}
+    ${t(318, 84, 'The near ear hears it')}
+    ${t(318, 102, 'first, and louder.')}
+    ${t(318, 146, 'AHEAD ↕ BEHIND · HARD', 'cob')}
+    ${t(318, 168, 'Both ears hear it the same.')}
+    ${t(318, 186, 'Only the tone changes:')}
+    ${t(318, 204, 'behind sounds duller.')}
+    ${t(318, 248, 'YOU, SEEN FROM ABOVE')}
+  `,
+  );
 }

@@ -70,6 +70,10 @@ export interface FlickRecord {
   path: [number, number][];
   /** Speed during the throw, 16 bins, normalised to the peak. */
   profile: number[];
+  /** Timed path for replays: [ms since the target appeared, along, perp], up to ~70 points. */
+  trace?: [number, number, number][];
+  /** Every click during the flick, in the same units as `trace`. */
+  shots?: { t: number; along: number; perp: number; hit: boolean }[];
 }
 
 const MIN_PEAK = 25; // °/s: slower than this and there was no real throw
@@ -190,6 +194,25 @@ export function recordFlick(
   for (let i = 0; i < n; i += step) path.push([round3(along[i] / dist), round3(perp[i] / dist)]);
   if (n && (n - 1) % step !== 0) path.push([round3(along[n - 1] / dist), round3(perp[n - 1] / dist)]);
 
+  // Replay trace: evenly spaced in samples, plus every moment the analysis cares about, so the
+  // replay passes exactly through the landing point and the clicks.
+  const keys = new Set<number>([0, onsetIdx, peakIdx, endIdx, n - 1]);
+  for (let i = 0; i < n; i += Math.max(1, Math.ceil(n / 64))) keys.add(i);
+  for (const c of clicks) {
+    const k = samples.findIndex((sm) => sm.t === c.t);
+    if (k >= 0) keys.add(k);
+  }
+  const trace: [number, number, number][] = [...keys]
+    .filter((i) => i >= 0 && i < n)
+    .sort((a, b) => a - b)
+    .map((i) => [Math.round(samples[i].t * 1000), round3(along[i] / dist), round3(perp[i] / dist)]);
+  const shots = clicks.map((c) => ({
+    t: Math.round(c.t * 1000),
+    along: round3(((c.yaw - start.yaw) * ux + (c.pitch - start.pitch) * uy) / dist),
+    perp: round3(((c.yaw - start.yaw) * nx + (c.pitch - start.pitch) * ny) / dist),
+    hit: c.hit,
+  }));
+
   const tol = radiusDeg / dist;
   const cls: FlickClass =
     dist < radiusDeg * 2.5 || peak < MIN_PEAK
@@ -223,6 +246,8 @@ export function recordFlick(
     misses,
     path,
     profile,
+    trace,
+    shots,
   };
 }
 
@@ -493,4 +518,64 @@ export function estimateDelay(segs: readonly { t: number[]; aim: number[]; tgt: 
     }
   }
   return best > 0.3 ? bestLag * GRID * 1000 : null;
+}
+
+// ------------------------------------------------------------------------------------ hearing
+
+/** One Echo target: where the sound came from and how you reacted to it. */
+export interface EchoRecord {
+  /** Where the target was when it appeared, relative to your aim: + = right, − = left, ±180 = behind. */
+  rel: number;
+  /** Which way your first real turn went: +1 right, −1 left, 0 never turned. */
+  turnDir: number;
+  /** ms from the sound to your first real turn (null if you never turned). */
+  turnMs: number | null;
+  /** ms until the target was on your screen (null if it never was). */
+  seenMs: number | null;
+  hit: boolean;
+  totalMs: number;
+}
+
+/** Past this, "behind you" is a coin flip: either way round is fine. */
+export const EITHER_WAY_DEG = 165;
+
+/** true = turned the short way, false = the long way, null = can't tell (dead behind, or no turn). */
+export function echoCorrect(r: EchoRecord): boolean | null {
+  if (!r.turnDir || Math.abs(r.rel) >= EITHER_WAY_DEG) return null;
+  return Math.sign(r.rel) === r.turnDir;
+}
+
+export interface EchoSummary {
+  n: number;
+  hits: number;
+  /** Records where the first turn could be judged. */
+  judged: number;
+  correct: number;
+  rate: number;
+  front: { n: number; rate: number };
+  behind: { n: number; rate: number };
+  turnMs: number;
+  seenMs: number;
+}
+
+export function summariseEcho(records: readonly EchoRecord[]): EchoSummary {
+  const judged = records.filter((r) => echoCorrect(r) !== null);
+  const ok = judged.filter((r) => echoCorrect(r));
+  const part = (inBehind: boolean) => {
+    const g = judged.filter((r) => Math.abs(r.rel) > 90 === inBehind);
+    return { n: g.length, rate: g.length ? g.filter((r) => echoCorrect(r)).length / g.length : NaN };
+  };
+  const turns = records.map((r) => r.turnMs).filter((x): x is number => x !== null);
+  const seen = records.map((r) => r.seenMs).filter((x): x is number => x !== null);
+  return {
+    n: records.length,
+    hits: records.filter((r) => r.hit).length,
+    judged: judged.length,
+    correct: ok.length,
+    rate: judged.length ? ok.length / judged.length : NaN,
+    front: part(false),
+    behind: part(true),
+    turnMs: median(turns),
+    seenMs: median(seen),
+  };
 }

@@ -61,6 +61,22 @@ App.register('settings', (app) => {
           ${row('Volume', '', range('volume', 0, 1, 0.05, s.volume, (v) => `${Math.round(v * 100)}%`))}
         </div>
         <div class="panel glass">
+          <h4><span>Sound direction</span><span>${s.spatialAudio ? 'headphones' : 'speakers'}</span></h4>
+          ${row('3D audio', 'On for headphones: sounds come from where the target is — left, right, ahead or behind. Off for speakers: left/right only.', sw('spatialAudio', s.spatialAudio))}
+          ${row('Target sounds', 'A ping when a target appears. Used by Snap and calibration wide flicks. Echo always plays them.', sw('targetSounds', s.targetSounds))}
+          <div class="audio-check">
+            <span class="ac-label">Audio check <small>Each button plays a ping from that direction.</small></span>
+            <div class="ac-pad">
+              <button class="ac ac-ahead" data-act="acheck" data-az="0">Ahead</button>
+              <button class="ac ac-left" data-act="acheck" data-az="-90">◀ Left</button>
+              <i class="ac-you" aria-hidden="true"></i>
+              <button class="ac ac-right" data-act="acheck" data-az="90">Right ▶</button>
+              <button class="ac ac-behind" data-act="acheck" data-az="180">Behind</button>
+            </div>
+            <p class="note" style="margin:0">If "Left" sounds right, your headphones are on backwards. Behind should sound duller than ahead.</p>
+          </div>
+        </div>
+        <div class="panel glass">
           <h4><span>Your data</span><span>${store.get().sessions.length} runs saved</span></h4>
           <p class="note" style="margin:0 0 14px">Stars, levels and your Logbook live only in this browser. Export a backup to move them to another PC or browser, or to keep them safe before clearing site data.</p>
           <div class="actions">
@@ -99,7 +115,10 @@ App.register('settings', (app) => {
   });
   el.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
-    if (t.type === 'checkbox' && t.dataset.set) apply(t.dataset.set, t.checked);
+    if (t.type === 'checkbox' && t.dataset.set) {
+      apply(t.dataset.set, t.checked);
+      if (t.dataset.set === 'spatialAudio') render();
+    }
     if (t.type === 'number') render();
   });
 
@@ -126,6 +145,14 @@ App.register('settings', (app) => {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
     import: () => el.querySelector<HTMLInputElement>('[data-file]')?.click(),
+    acheck: (b) => {
+      const audio = app.game.audio;
+      audio.unlock();
+      audio.spawn(audio.pointAround(Number(b.dataset.az), 6));
+      b.classList.remove('ping');
+      void b.offsetWidth;
+      b.classList.add('ping');
+    },
   });
 
   el.addEventListener('change', async (e) => {

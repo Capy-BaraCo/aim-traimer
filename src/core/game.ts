@@ -45,6 +45,12 @@ const DEG = Math.PI / 180;
 const _v = new Vector3();
 const _d = new Vector3();
 const _o = new Vector3();
+const _fw = new Vector3();
+const _up = new Vector3();
+// onScreen() is called from inside drill updates, so it must not borrow the loop's scratch vectors.
+const _se = new Vector3();
+const _sd = new Vector3();
+const _sp = new Vector3();
 
 export const wrap180 = (d: number): number => ((((d + 180) % 360) + 360) % 360) - 180;
 
@@ -130,6 +136,18 @@ export class Game {
     this.hud.showFps(s.showFps);
     this.hud.setScopeEnabled(s.showScope);
     this.audio.setVolume(s.volume);
+    this.audio.spatial = s.spatialAudio;
+  }
+
+  /** True when a world point is inside the current view (with `margin` of the half-screen, 1 = the edge). */
+  onScreen(p: Vector3, margin = 1): boolean {
+    const cam = this.engine.camera;
+    this.eye(_se);
+    this.aimDir(_sd);
+    if (_sp.copy(p).sub(_se).dot(_sd) <= 0) return false;
+    cam.updateMatrixWorld();
+    _sp.copy(p).project(cam);
+    return Math.abs(_sp.x) <= margin && Math.abs(_sp.y) <= margin;
   }
 
   // ---------------------------------------------------------------- aim
@@ -494,6 +512,11 @@ export class Game {
       const eye = cam.position;
       for (const b of this.brains.values()) b.update(dt, eye);
     }
+
+    // Ears follow the camera, so positional sounds stay put in the world while you turn.
+    _fw.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    _up.set(0, 1, 0).applyQuaternion(cam.quaternion);
+    this.audio.listen(cam.position, _fw, _up);
 
     this.heat = Math.max(0, this.heat - dt * 1.6);
     for (const f of this.figures) f.update(dt, this.time, cam);

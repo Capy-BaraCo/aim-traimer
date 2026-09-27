@@ -11,6 +11,7 @@ import '@fontsource/geist/500';
 import '@fontsource/geist/600';
 import './styles/main.css';
 import './styles/v2.css';
+import './styles/film.css';
 
 import { App } from './ui/app';
 import './ui/screens/home';

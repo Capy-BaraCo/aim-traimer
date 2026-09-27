@@ -4,6 +4,7 @@
  */
 
 import type { DrillId } from '../core/coach';
+import type { LessonKind } from '../film/lessons';
 import { cmPer360, degPerCm, edpi, mmForDegrees, STYLE_BANDS, styleFor } from '../core/sens';
 import * as D from './diagrams';
 
@@ -26,6 +27,8 @@ export interface Chapter {
   fixes?: [string, string][];
   diagram?: (c: Ctx) => { svg: string; caption: string };
   drills: (DrillId | 'protractor')[];
+  /** Film room demos: animated, narrated examples of each mistake and its fix. */
+  films?: LessonKind[];
   exercises: { title: string; detail: string; dose: string }[];
   cta?: { label: string; route: 'calibrate' | 'training' | 'logbook' };
 }
@@ -50,6 +53,9 @@ export const GLOSSARY: Record<string, string> = {
   'Reaction time': 'The gap between something appearing and your hand starting to move.',
   'Range effect': 'Most people flick short distances too far and long distances too short. It is normal, and practice fixes it.',
   'Landing point': 'Where your first big movement stops, compared with the target. 100% means you stopped exactly on it.',
+  '3D audio': 'Sound that seems to come from a place around you — left, right, ahead or behind — through ordinary headphones. Games do it with an HRTF.',
+  HRTF: 'Head-related transfer function: a recipe for how your head and ears change a sound coming from each direction. Apply it and headphones can sound like the room around you.',
+  'Short way': 'Turning toward a sound on the side it came from — the smaller turn. The long way is the other direction round.',
 };
 
 /** Inline glossary term with a hover/focus definition. */
@@ -252,6 +258,7 @@ export const CHAPTERS: Chapter[] = [
     ],
     diagram: () => ({ svg: D.flickProfile(), caption: 'The big movement either stops short, goes past, or lands clean. The small movement after it fixes the rest.' }),
     drills: ['blink', 'snap'],
+    films: ['overshoot', 'undershoot', 'clean'],
     exercises: [
       { title: 'Flick & freeze', detail: 'In the Practice Range, flick to a bot’s head and freeze without clicking. Did you land on it? No click = no panic.', dose: '20 reps' },
       { title: 'Short then wide', detail: 'Do Blink, then Snap, in that order. Short first trains precision; wide second trains confidence.', dose: 'daily' },
@@ -296,6 +303,7 @@ export const CHAPTERS: Chapter[] = [
     ],
     diagram: () => ({ svg: D.flickProfile(), caption: 'Past the band = overshoot, before it = undershoot. The Logbook shows your own version of this.' }),
     drills: ['blink', 'snap'],
+    films: ['overshoot', 'undershoot', 'curve', 'driveby', 'slowstart', 'slowfix', 'clean'],
     cta: { label: 'Open your Logbook', route: 'logbook' },
     exercises: [
       { title: 'Read your map', detail: 'After a Blink run, open the debrief’s landing map. Are your dots left of the line (short), right of it (past), or spread out?', dose: '1 min' },
@@ -303,8 +311,48 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    slug: 'switching',
+    slug: 'listening',
     n: '07',
+    title: 'Hearing where they are',
+    tag: 'SKILL',
+    short: 'Your ears can point you at an enemy before your eyes can — if you let them.',
+    analogy: 'Like someone calling your name in a crowd: you turn toward it without thinking. Echo trains that turn to be fast and the right way round.',
+    sections: () => [
+      {
+        h: 'Why it matters',
+        html: `<p>In Overwatch most of the fight is <b>off your screen</b>. A flanker behind you, a Tracer blinking in, footsteps round a corner. You hear them before you see them. If your first turn goes the right way, you face them in half the time.</p>`,
+      },
+      {
+        h: 'How your ears find direction',
+        html: `<p><b>Left and right are easy.</b> A sound on your left reaches your left ear first and louder. Your brain does this without you noticing.</p>
+        <p><b>Ahead and behind are hard.</b> Both ears hear the sound the same way. The only clue is a small change in tone made by the shape of your ears: sounds <b>behind you are duller</b>, sounds ahead are brighter. Headphones make this harder still, so games use ${term('3D audio')} to fake it.</p>`,
+      },
+      {
+        h: 'The three rules',
+        html: `<ol><li><b>Turn the short way.</b> Left ear louder → turn left. Don't spin the long way round.</li><li><b>Turn on the sound, not on the sight.</b> Start moving the instant you hear it. Your eyes will catch the target on the way.</li><li><b>Dull and centred = behind.</b> Turn a big half-circle toward whichever ear it leans to. Don't search.</li></ol>`,
+      },
+      {
+        h: 'In this app, and in Overwatch',
+        html: `<p>Here, targets in <b>Echo</b>, <b>Snap</b> and calibration's wide flicks make a sound from where they are. Use headphones and run the <b>Audio check</b> in Settings first — if "Left" sounds right, your headphones are on backwards.</p>
+        <p>In Overwatch, try the <b>Dolby Atmos for Headphones</b> option in the sound settings, and keep music low: footsteps are the sound that saves you most.</p>`,
+      },
+    ],
+    fixes: [
+      ['You turn the wrong way', 'Run Settings → Audio check. Then turn toward the ear that hears it first.'],
+      ['You can’t tell ahead from behind', 'Listen for the tone: behind is duller. Echo levels 1–3 show an arc after each sound, so you learn what each direction sounds like.'],
+      ['You wait until you see it', 'Start turning on the sound. Being roughly right early beats being exactly right late.'],
+    ],
+    diagram: () => ({ svg: D.hearing(), caption: 'Left and right come from timing and loudness. Ahead and behind only from tone — that is why they get mixed up.' }),
+    drills: ['echo', 'snap'],
+    exercises: [
+      { title: 'Eyes-closed audio check', detail: 'Settings → Audio check. Close your eyes and have someone press the buttons in a random order. Call out each direction.', dose: '20 calls' },
+      { title: 'Where are they?', detail: 'In an Overwatch custom game, ask a friend to walk around you while you stand still and face a wall. Point to them using only sound, then turn and check.', dose: '5 min' },
+      { title: 'A week of Echo', detail: 'Play Echo daily for a week. Watch "First turn the short way" in the debrief climb.', dose: '7 days' },
+    ],
+  },
+  {
+    slug: 'switching',
+    n: '08',
     title: 'Target switching',
     tag: 'SKILL',
     short: 'When one enemy goes down, move straight to the next — and pick the closest one.',
@@ -329,7 +377,7 @@ export const CHAPTERS: Chapter[] = [
   },
   {
     slug: 'precision',
-    n: '08',
+    n: '09',
     title: 'Precision',
     tag: 'SKILL',
     short: 'Tiny, faraway targets need small, slow movements from your fingers, not your arm.',
@@ -360,7 +408,7 @@ export const CHAPTERS: Chapter[] = [
   },
   {
     slug: 'movement',
-    n: '09',
+    n: '10',
     title: 'Move while you shoot',
     tag: 'SKILL',
     short: 'In Overwatch you can shoot accurately while moving — so never stand still in a fight.',
@@ -386,7 +434,7 @@ export const CHAPTERS: Chapter[] = [
   },
   {
     slug: 'routine',
-    n: '10',
+    n: '11',
     title: 'The routine & levels',
     tag: 'PLAN',
     short: 'A few minutes every day beats a long session once a week.',
@@ -399,15 +447,15 @@ export const CHAPTERS: Chapter[] = [
       },
       {
         h: 'The Daily warm-up',
-        html: `<p>One button in Training plays six drills in a row, each at your current level: Duelist → Blink → Snap → Triad → Pin → Crossfire. About five minutes. Do it before you play Overwatch, and it keeps your streak alive.</p>`,
+        html: `<p>One button in Training plays seven drills in a row, each at your current level: Duelist → Blink → Snap → Echo → Triad → Pin → Crossfire. About six minutes. Do it before you play Overwatch, and it keeps your streak alive.</p>`,
       },
       {
         h: 'The week',
         html: `<p>Monday to Friday: Daily warm-up, then one Deathmatch, then play. At the weekend, read your Logbook. Only change your sensitivity after a full week of the same pattern.</p>`,
       },
     ],
-    diagram: () => ({ svg: D.routine(), caption: 'A daily plan that goes from smooth to demanding.' }),
-    drills: ['duelist', 'blink', 'snap', 'triad', 'pin', 'crossfire'],
+    diagram: () => ({ svg: D.routine(), caption: 'One button, seven drills, each at your current level. Smooth tracking first, precision near the end.' }),
+    drills: ['duelist', 'blink', 'snap', 'echo', 'triad', 'pin', 'crossfire'],
     cta: { label: 'Go to Training', route: 'training' },
     exercises: [
       { title: 'Five days in a row', detail: 'Do the Daily warm-up five days running. On day five, compare your Logbook with day one.', dose: '5 days' },
@@ -416,7 +464,7 @@ export const CHAPTERS: Chapter[] = [
   },
   {
     slug: 'words',
-    n: '11',
+    n: '12',
     title: 'Words, explained',
     tag: 'WORDS',
     short: 'Every word in this manual, in plain English.',

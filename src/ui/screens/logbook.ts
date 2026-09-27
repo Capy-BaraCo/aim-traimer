@@ -1,4 +1,4 @@
-import { median, summariseFlicks } from '../../core/analytics';
+import { median, summariseFlicks, type DirSector } from '../../core/analytics';
 import { feedback, flickFindings, placementFindings, trackingFindings, type DrillId, type Finding } from '../../core/coach';
 import { rankFor, streak, totalStars } from '../../core/progress';
 import { store } from '../../core/store';
@@ -6,7 +6,9 @@ import { DRILL_DEFS } from '../../drills/registry';
 import { App } from '../app';
 import * as C from '../charts';
 import { actions, esc, h } from '../dom';
-import { openBriefing } from '../session';
+import { lessonKindFor } from '../../film/lessons';
+import { canFilm } from '../film';
+import { filmFinding, openBriefing } from '../session';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
@@ -56,6 +58,7 @@ App.register('logbook', (app) => {
     { label: 'Tracking', id: 'duelist' },
     { label: 'Short flicks', id: 'blink' },
     { label: 'Wide flicks', id: 'snap' },
+    { label: 'Hearing', id: 'echo' },
     { label: 'Precision', id: 'pin' },
     { label: 'Placement', id: 'corner' },
     { label: 'Switching', id: 'triad' },
@@ -72,6 +75,16 @@ App.register('logbook', (app) => {
       </div>
       <div class="trend"><span class="mono muted">Reaction delay, last ${delays.length} runs</span>${C.sparkline(delays.map((d) => Math.max(0, 400 - d) / 4))}</div>`
     : '<p class="note">Play Duelist or Crossfire to measure your tracking.</p>';
+
+  const hears = p.hearLog ?? [];
+  const fin = (xs: (number | null)[]) => xs.filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
+  const hearBlock = hears.length
+    ? `<div class="kpis">
+        <div><span>First turn the short way</span><b>${fin(hears.map((x) => x.rate)).length ? pct(avg(fin(hears.map((x) => x.rate)))) : '—'}</b></div>
+        <div><span>… when it's behind you</span><b>${fin(hears.map((x) => x.behind)).length ? pct(avg(fin(hears.map((x) => x.behind)))) : '—'}</b></div>
+        <div><span>Start turning after</span><b>${fin(hears.map((x) => x.turnMs)).length ? Math.round(median(fin(hears.map((x) => x.turnMs)))) : '—'}<small> ms</small></b></div>
+      </div>`
+    : '<p class="note">Play Echo (with headphones) to measure how well you hear where targets are.</p>';
 
   const profile = fs
     ? `<p class="lede plain">When you flick, your first movement usually stops <b>${landingWords(fs.landing)}</b>.
@@ -107,6 +120,7 @@ App.register('logbook', (app) => {
             <p class="note" style="margin:0">The further out, the stronger. Grey dots haven't been measured yet.</p>
           </div>
           <div class="panel glass rise"><h4><span>Tracking</span><span>last ${tracks.length} runs</span></h4>${trackBlock}</div>
+          <div class="panel glass rise"><h4><span>Hearing</span><span>last ${hears.length} runs</span></h4>${hearBlock}</div>
         </div>
         <div class="panel glass rise">
           <h4><span>Coach · this week work on</span></h4>
@@ -114,7 +128,12 @@ App.register('logbook', (app) => {
             fixes.length
               ? fixes
                   .map(
-                    (f) => `<article class="finding fix"><h4>${esc(f.title)}</h4><p>${esc(f.body)}</p><p class="f-tip"><b>Try this:</b> ${esc(f.tip)}</p>${f.drill ? `<button class="btn small ghost" data-act="brief" data-id="${f.drill}">Practise in ${esc(name(f.drill))} →</button>` : ''}</article>`,
+                    (f) =>
+                      `<article class="finding fix"><h4>${esc(f.title)}</h4><p>${esc(f.body)}</p><p class="f-tip"><b>Try this:</b> ${esc(f.tip)}</p><div class="f-acts">${
+                        canFilm(lessonKindFor(f.id), p.flickLog, f.id.startsWith('dir-') ? (f.id.slice(4) as DirSector) : undefined)
+                          ? `<button class="watch" data-act="film" data-fid="${esc(f.id)}">Watch it</button>`
+                          : ''
+                      }${f.drill ? `<button class="btn small ghost" data-act="brief" data-id="${f.drill}">Practise in ${esc(name(f.drill))} →</button>` : ''}</div></article>`,
                   )
                   .join('')
               : '<p class="note">Not enough data yet. Play a Daily warm-up and come back.</p>'
@@ -147,6 +166,12 @@ App.register('logbook', (app) => {
         </div>
       </section>
     </div>`);
-  actions(el, { brief: (b) => openBriefing(app, b.dataset.id as DrillId) });
+  actions(el, {
+    brief: (b) => openBriefing(app, b.dataset.id as DrillId),
+    film: (b) => {
+      const f = findings.find((x) => x.id === b.dataset.fid);
+      if (f) filmFinding(app, f, p.flickLog, 'From your recent flicks');
+    },
+  });
   return { el };
 });
