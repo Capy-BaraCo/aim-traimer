@@ -6,7 +6,7 @@
     "recipe": "next-feature",
     "createdAt": "2026-10-06T06:13:29.161Z"
   },
-  "seq": 308,
+  "seq": 315,
   "elements": [
     {
       "id": "el_81fo6wc1",
@@ -1284,7 +1284,7 @@
           },
           {
             "term": "Song time",
-            "meaning": "Seconds into the song as the player hears it: AudioContext time since the music started, minus output latency, minus the audio offset. Everything in a run is timed from it."
+            "meaning": "Seconds into the song as the player hears it: AudioContext time since the music started, minus output latency (baseLatency + outputLatency), minus the audio offset. Everything in a run is timed from it."
           },
           {
             "term": "Beat cues",
@@ -1490,7 +1490,7 @@
           "src/rhythm/types.ts"
         ],
         "size": "S",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1692,11 +1692,11 @@
       "title": "Play music on the AudioContext clock",
       "data": {
         "title": "Play music on the AudioContext clock",
-        "description": "In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − outputLatency (baseLatency if outputLatency is missing) − audioOffsetMs/1000; it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.",
+        "description": "In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − output latency − audioOffsetMs/1000, where output latency = baseLatency + outputLatency (the Web Audio spec's full output delay; baseLatency alone if outputLatency is missing); it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.",
         "doneWhen": [
           "songTime() follows the audio, not frame time; over a 4-minute song its drift from the source position stays under 10 ms (dev log).",
           "Pause then resume keeps music and targets aligned, and menu sounds still play while paused.",
-          "Works on Firefox without outputLatency (falls back to baseLatency)."
+          "Works in browsers without outputLatency (falls back to baseLatency alone)."
         ],
         "milestone": "2 · Songs & audio",
         "touches": [
@@ -1704,7 +1704,7 @@
           "src/core/game.ts"
         ],
         "size": "M",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1715,7 +1715,7 @@
       "title": "Add the audio offset calibration and settings",
       "data": {
         "title": "Add the audio offset calibration and settings",
-        "description": "New settings audioOffsetMs (default 0) and beatStrip (default on). Settings → audio gets \"Calibrate rhythm timing\": a metronome at 100 BPM; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.",
+        "description": "New settings audioOffsetMs (default 0) and beatStrip (default on). Game.applySettings passes audioOffsetMs to the Audio class (audio.audioOffsetMs, from T10). Settings → audio gets \"Calibrate rhythm timing\": a metronome at 100 BPM played on the music clock (T10's playMusic with a generated click buffer), with clicks judged by songTime() while the offset is held at 0, so the calibration measures exactly what song time misses; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.",
         "doneWhen": [
           "Both settings persist and are included in the backup export.",
           "The helper recovers a simulated fixed latency of +80 ms within ±10 ms, with jittered clicks (test).",
@@ -1724,6 +1724,7 @@
         "milestone": "2 · Songs & audio",
         "touches": [
           "src/core/store.ts",
+          "src/core/game.ts",
           "src/ui/screens/settings.ts",
           "src/rhythm/calibrate.ts",
           "tests/rhythm-calibrate.test.ts"
@@ -1754,7 +1755,7 @@
           "src/core/game.ts"
         ],
         "size": "M",
-        "status": "todo"
+        "status": "done"
       }
     },
     {

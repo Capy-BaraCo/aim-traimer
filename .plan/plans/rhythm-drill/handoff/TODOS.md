@@ -1,6 +1,6 @@
 # Overdrive: coding-agent handoff
 
-Generated from plan `rhythm-drill` at seq 308 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
+Generated from plan `rhythm-drill` at seq 315 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
 
 Model pack (source of truth): `.plan/plans/rhythm-drill/out/model/`. Machine-readable copy of this list: `handoff/todos.json`.
 
@@ -87,12 +87,12 @@ Done when:
 - Read first: R1, glossary: Song time, Audio offset
 - Touches: `src/core/audio.ts`, `src/core/game.ts`
 
-In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − outputLatency (baseLatency if outputLatency is missing) − audioOffsetMs/1000; it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.
+In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − output latency − audioOffsetMs/1000, where output latency = baseLatency + outputLatency (the Web Audio spec's full output delay; baseLatency alone if outputLatency is missing); it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.
 
 Done when:
 - [ ] songTime() follows the audio, not frame time; over a 4-minute song its drift from the source position stays under 10 ms (dev log).
 - [ ] Pause then resume keeps music and targets aligned, and menu sounds still play while paused.
-- [ ] Works on Firefox without outputLatency (falls back to baseLatency).
+- [ ] Works in browsers without outputLatency (falls back to baseLatency alone).
 
 ### [ ] T12 · Build the synthwave scene
 
@@ -159,9 +159,9 @@ Done when:
 - wave 2 · Sonnet · size M: Settings UI + one pure helper; follow existing settings screen idioms.
 - Depends on: T10 · Implements: G2 · Mitigates: R1
 - Read first: R1, glossary: Audio offset
-- Touches: `src/core/store.ts`, `src/ui/screens/settings.ts`, `src/rhythm/calibrate.ts`, `tests/rhythm-calibrate.test.ts`
+- Touches: `src/core/store.ts`, `src/core/game.ts`, `src/ui/screens/settings.ts`, `src/rhythm/calibrate.ts`, `tests/rhythm-calibrate.test.ts`
 
-New settings audioOffsetMs (default 0) and beatStrip (default on). Settings → audio gets "Calibrate rhythm timing": a metronome at 100 BPM; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.
+New settings audioOffsetMs (default 0) and beatStrip (default on). Game.applySettings passes audioOffsetMs to the Audio class (audio.audioOffsetMs, from T10). Settings → audio gets "Calibrate rhythm timing": a metronome at 100 BPM played on the music clock (T10's playMusic with a generated click buffer), with clicks judged by songTime() while the offset is held at 0, so the calibration measures exactly what song time misses; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.
 
 Done when:
 - [ ] Both settings persist and are included in the backup export.

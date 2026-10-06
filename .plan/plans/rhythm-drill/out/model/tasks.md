@@ -3,13 +3,13 @@
 ## 1 · Chart logic (pure)
 
 ### T1 · Define Overdrive's song, analysis and chart types
-- 1 · Chart logic (pure) · S · todo
+- 1 · Chart logic (pure) · S · done
 - Implements: G1, G3
 - Touches: src/rhythm/types.ts
 - Context: src/rhythm/types.ts holds types only, plus `as const` lists DIFFICULTIES, SECTION_KINDS, TARGET_KINDS and FLICK_SHAPES. SongMeta {id: SHA-256 hex of the file bytes, name: file name without extension, mime, duration: seconds, addedAt: ISO string, preset: PresetId, difficulty}. Analysis (T3) {version, sampleRate, duration, bpm, beats: number[] seconds, beatEnergy: number[], onsetEnv: Float32Array, onsetHop: seconds per envelope frame, confidence: 0..1}. It has no downbeats. Structure (T4) {downbeats: number[], bars: number[] bar start times, sections: Section[]} with Section {startBar, endBar (exclusive), kind}. PresetRow {weights: Record<TargetKind, number>, perBar: {from, to}}, Preset {id, name, rows: Record<SectionKind, PresetRow>, flickShapes: Record<FlickShape, number>, params?: multipliers}. ChartTarget is a union on kind; every target has launchTime, landTime, targetTime, windowEnd (seconds of song time) and position {bearing, pitch, distance}. Bearing is in degrees clockwise, matching dirFrom() in src/drills/common.ts; pitch is in degrees up; distance is in metres. For figures (strafer, peeker, decoy), position is the ground point and pitch is ignored. FlickTarget adds shape; BurstTarget adds orbs: {time, position}[] and counts as one target in density; Strafer, Hold and Peeker add their params. Wall {bearing, distance, width, height}. Chart {songId, preset, difficulty, level, duration, targets, walls}.
 - Done when:
-  - [ ] src/rhythm/types.ts exports everything above and `npm run typecheck` passes.
-  - [ ] Comments on each type cite the glossary term it implements (Song, Chart, Style preset, Target, Target beat, Hit window).
+  - [x] src/rhythm/types.ts exports everything above and `npm run typecheck` passes.
+  - [x] Comments on each type cite the glossary term it implements (Song, Chart, Style preset, Target, Target beat, Hit window).
 
 ### T2 · Write a test-only song generator with known beats and sections
 - 1 · Chart logic (pure) · S · todo
@@ -109,21 +109,21 @@
   - [ ] Replaying a song uses the cache without starting the worker; bumping ANALYSIS_VERSION forces a re-analysis.
 
 ### T10 · Play music on the AudioContext clock
-- 2 · Songs & audio · M · todo
+- 2 · Songs & audio · M · done
 - Implements: G2
 - Touches: src/core/audio.ts, src/core/game.ts
-- Context: In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − outputLatency (baseLatency if outputLatency is missing) − audioOffsetMs/1000; it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.
+- Context: In src/core/audio.ts: playMusic(buffer, fromSec) starts an AudioBufferSourceNode through a music gain under master. pauseMusic() stops the source and remembers the position; resumeMusic() starts a new source from there. Do not suspend the shared AudioContext, because menu and hit sounds must keep working. stopMusic(). songTime() = (ctx.currentTime − startedAt) + startOffset − output latency − audioOffsetMs/1000, where output latency = baseLatency + outputLatency (the Web Audio spec's full output delay; baseLatency alone if outputLatency is missing); it is frozen while paused. Game's pause and resume call pauseMusic and resumeMusic when a song is playing.
 - Done when:
-  - [ ] songTime() follows the audio, not frame time; over a 4-minute song its drift from the source position stays under 10 ms (dev log).
-  - [ ] Pause then resume keeps music and targets aligned, and menu sounds still play while paused.
-  - [ ] Works on Firefox without outputLatency (falls back to baseLatency).
+  - [x] songTime() follows the audio, not frame time; over a 4-minute song its drift from the source position stays under 10 ms (dev log).
+  - [x] Pause then resume keeps music and targets aligned, and menu sounds still play while paused.
+  - [x] Works in browsers without outputLatency (falls back to baseLatency alone).
 
 ### T11 · Add the audio offset calibration and settings
 - 2 · Songs & audio · M · todo
 - Depends on: T10
 - Implements: G2
-- Touches: src/core/store.ts, src/ui/screens/settings.ts, src/rhythm/calibrate.ts, tests/rhythm-calibrate.test.ts
-- Context: New settings audioOffsetMs (default 0) and beatStrip (default on). Settings → audio gets "Calibrate rhythm timing": a metronome at 100 BPM; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.
+- Touches: src/core/store.ts, src/core/game.ts, src/ui/screens/settings.ts, src/rhythm/calibrate.ts, tests/rhythm-calibrate.test.ts
+- Context: New settings audioOffsetMs (default 0) and beatStrip (default on). Game.applySettings passes audioOffsetMs to the Audio class (audio.audioOffsetMs, from T10). Settings → audio gets "Calibrate rhythm timing": a metronome at 100 BPM played on the music clock (T10's playMusic with a generated click buffer), with clicks judged by songTime() while the offset is held at 0, so the calibration measures exactly what song time misses; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.
 - Done when:
   - [ ] Both settings persist and are included in the backup export.
   - [ ] The helper recovers a simulated fixed latency of +80 ms within ±10 ms, with jittered clicks (test).
@@ -132,15 +132,15 @@
 ## 3 · Play
 
 ### T12 · Build the synthwave scene
-- 3 · Play · M · todo
+- 3 · Play · M · done
 - Implements: G5
 - Touches: src/world/synthwave.ts, src/world/arena.ts, src/core/game.ts
 - Context: src/world/synthwave.ts: a sky gradient, a striped sun, mountain silhouettes and a neon grid floor that scrolls one cell per beat and glows on the beat (D6), driven by a songTime getter and the beat list. While Overdrive runs, the Arena's meshes are hidden and its colliders switched off (Game.castRay and movement read arena.colliders), and the chart's walls become colliders. Everything is restored on exit. Respects the FX level.
 - Done when:
-  - [ ] Overdrive runs in the synthwave scene; every other drill still shows the normal arena with its colliders, including after quitting Overdrive mid-run.
-  - [ ] Arena pillars don't block shots during Overdrive; chart walls do.
-  - [ ] The grid scrolls one cell per beat.
-  - [ ] Frame rate at FX 'full' is no worse than Duelist on the same machine.
+  - [x] Overdrive runs in the synthwave scene; every other drill still shows the normal arena with its colliders, including after quitting Overdrive mid-run.
+  - [x] Arena pillars don't block shots during Overdrive; chart walls do.
+  - [x] The grid scrolls one cell per beat.
+  - [x] Frame rate at FX 'full' is no worse than Duelist on the same machine.
 
 ### T13 · Create the Overdrive drill core
 - 3 · Play · L · todo
@@ -227,4 +227,4 @@
   - [ ] No target is unreadable at Expert on a fast song.
   - [ ] The tuned values are committed in presets.ts and levels.ts, and `npm test` is green.
 
-_Generated by live-planner from plan "rhythm-drill" at seq 308. Change the plan and recompile; do not edit by hand._
+_Generated by live-planner from plan "rhythm-drill" at seq 315. Change the plan and recompile; do not edit by hand._
