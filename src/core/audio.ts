@@ -71,11 +71,11 @@ export class Audio {
     if (this.master) this.master.gain.value = v;
   }
 
-  /** Must be called from a user gesture. */
-  unlock(): void {
+  /** Create the shared AudioContext and its gain chain if they don't exist yet. Leaves the context as the browser made it (suspended until a gesture resumes it). */
+  private ensureContext(): AudioContext | null {
     if (!this.ctx) {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
+      if (!Ctx) return null;
       this.ctx = new Ctx({ latencyHint: 'interactive' });
       this.master = this.ctx.createGain();
       this.master.gain.value = this.volume;
@@ -88,7 +88,13 @@ export class Audio {
       const d = this.noise.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    return this.ctx;
+  }
+
+  /** Must be called from a user gesture. */
+  unlock(): void {
+    const ctx = this.ensureContext();
+    if (ctx?.state === 'suspended') void ctx.resume();
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, gain: number, when = 0, slideTo?: number): void {
@@ -306,6 +312,13 @@ export class Audio {
   setMusicVolume(v: number): void {
     this.musicLevel = v;
     if (this.music) this.music.gain.value = v;
+  }
+
+  /** Decode an audio file with the shared AudioContext, so the buffer matches the playback sample rate. Works before unlock() (decoding needs no gesture). Rejects if the file can't be decoded. */
+  decode(bytes: ArrayBuffer): Promise<AudioBuffer> {
+    const ctx = this.ensureContext();
+    if (!ctx) return Promise.reject(new Error('Web Audio is not available'));
+    return ctx.decodeAudioData(bytes);
   }
 
   /** Start a song `fromSec` seconds in, replacing any song already loaded. False if audio isn't unlocked yet. */

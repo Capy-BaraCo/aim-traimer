@@ -8,7 +8,11 @@
  * never loads audio. The pure helpers need no DOM, so vitest runs them in node; the database
  * calls need a browser.
  */
+import { ANALYSIS_VERSION } from '../rhythm/analysis';
+import { structure as buildStructure } from '../rhythm/sections';
 import type { Analysis, Difficulty, PresetId, SongMeta, Structure } from '../rhythm/types';
+import type { AnalyseRequest, WorkerReply } from '../rhythm/worker-protocol';
+import type { Audio } from './audio';
 
 const DB_NAME = 'azimuth-songs';
 const DB_VERSION = 1;
@@ -248,4 +252,123 @@ export async function setPresets(id: string, preset: PresetId, difficulty: Diffi
     tx.objectStore(S_SONGS).put(next, id);
     return next;
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Decoding and analysis (T9)
+// ---------------------------------------------------------------------------------------------
+
+/** The message shown when a file can't be decoded as audio. */
+export const UNREADABLE_MESSAGE = "We couldn't read that song. Try an MP3, OGG or WAV file.";
+
+/** The message shown when listening to a song (the analysis) fails. */
+export const ANALYSIS_FAILED_MESSAGE = "We couldn't find the beat in that song. Try a different file.";
+
+/** Where a song is up to while prepare() works through it. */
+export interface PrepareProgress {
+  stage: 'decoding' | 'analysing' | 'sections' | 'ready';
+  /** 0..1 within the stage. */
+  fraction: number;
+}
+
+/** Everything the drill needs to play a song: its details, the decoded audio, and its analysis and structure. */
+export interface PreparedSong {
+  meta: SongMeta;
+  buffer: AudioBuffer;
+  analysis: Analysis;
+  structure: Structure;
+}
+
+/** Wrap a failure to decode (or analyse) a file as a SongLibraryError in plain words; library errors pass through. */
+export function describeDecodeError(e: unknown, fallback: string = UNREADABLE_MESSAGE): SongLibraryError {
+  return e instanceof SongLibraryError ? e : new SongLibraryError(fallback, e);
+}
+
+let nextRequestId = 1;
+
+/** Resolve on a later task, so the browser can draw and handle input between chunks of main-thread work. */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Run the analysis worker on some channels (transferred) and resolve with its analysis and structure. One worker per call, ended when it finishes. */
+function analyseInWorker(
+  channels: Float32Array[],
+  sampleRate: number,
+  onProgress: (p: PrepareProgress) => void,
+): Promise<CachedAnalysis> {
+  return new Promise<CachedAnalysis>((resolve, reject) => {
+    const id = nextRequestId++;
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('../rhythm/worker.ts', import.meta.url), { type: 'module' });
+    } catch (e) {
+      reject(describeDecodeError(e, ANALYSIS_FAILED_MESSAGE));
+      return;
+    }
+    const finish = (settle: () => void): void => {
+      worker.terminate();
+      settle();
+    };
+    worker.onmessage = (e: MessageEvent<WorkerReply>) => {
+      const m = e.data;
+      if (m.id !== id) return; // not ours
+      if (m.type === 'progress') onProgress({ stage: m.stage, fraction: m.fraction });
+      else if (m.type === 'done') finish(() => resolve({ analysis: m.analysis, structure: m.structure }));
+      else finish(() => reject(describeDecodeError(new Error(m.message), ANALYSIS_FAILED_MESSAGE)));
+    };
+    worker.onerror = (e) => finish(() => reject(describeDecodeError(new Error(e.message), ANALYSIS_FAILED_MESSAGE)));
+    const req: AnalyseRequest = { id, channels, sampleRate };
+    worker.postMessage(req, channels.map((c) => c.buffer));
+  });
+}
+
+/**
+ * Get a song ready to play: decode it with the shared AudioContext, then take its analysis from the
+ * cache or, if it has none (or one from an older ANALYSIS_VERSION), analyse it in a worker and cache
+ * the result. The Structure is always rebuilt from the Analysis, so retuned sections reach songs
+ * already in the library. A cache hit starts no worker. Errors are SongLibraryError in plain words.
+ */
+export async function prepare(
+  id: string,
+  audio: Audio,
+  onProgress: (p: PrepareProgress) => void = () => {},
+): Promise<PreparedSong> {
+  const found = await get(id);
+  if (!found) throw new SongLibraryError("That song isn't in your library any more.");
+  const cached = await getAnalysis(id).catch(() => null); // a broken cache just means analysing again
+  const fresh = cached && cached.analysis.version === ANALYSIS_VERSION ? cached.analysis : null;
+
+  onProgress({ stage: 'decoding', fraction: 0 });
+  let buffer: AudioBuffer;
+  try {
+    buffer = await audio.decode(await found.blob.arrayBuffer());
+    if (buffer.length === 0) throw new Error('empty audio');
+  } catch (e) {
+    throw describeDecodeError(e);
+  }
+  onProgress({ stage: 'decoding', fraction: 1 });
+
+  let analysis: Analysis;
+  let structure: Structure;
+  if (fresh) {
+    onProgress({ stage: 'sections', fraction: 0 });
+    analysis = fresh;
+    structure = buildStructure(fresh);
+  } else {
+    // Copy each channel out in its own task (about 20 ms each for four minutes), so no one task runs long.
+    const channels: Float32Array[] = [];
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      await nextTask();
+      const data = new Float32Array(buffer.length);
+      buffer.copyFromChannel(data, c);
+      channels.push(data);
+    }
+    await nextTask();
+    ({ analysis, structure } = await analyseInWorker(channels, buffer.sampleRate, onProgress));
+    await saveAnalysis(id, analysis, structure);
+  }
+  const meta: SongMeta = { ...found.meta, duration: analysis.duration };
+  onProgress({ stage: 'ready', fraction: 1 });
+  return { meta, buffer, analysis, structure };
 }
