@@ -24,11 +24,12 @@ function soundCard(rate: number, block: number) {
 }
 
 describe('output latency', () => {
-  it('uses outputLatency when the browser has it', () => {
-    expect(outputLatencyOf({ outputLatency: 0.042, baseLatency: 0.01 })).toBe(0.042);
+  it('adds baseLatency and outputLatency when the browser has both', () => {
+    expect(outputLatencyOf({ outputLatency: 0.042, baseLatency: 0.01 })).toBeCloseTo(0.052, 12);
+    expect(outputLatencyOf({ outputLatency: 0.042 })).toBe(0.042);
   });
 
-  it('falls back to baseLatency without outputLatency (Firefox, Safari) or when it reads 0', () => {
+  it('falls back to baseLatency alone without outputLatency (Safari, older Firefox) or when it reads 0', () => {
     expect(outputLatencyOf({ baseLatency: 0.012 })).toBe(0.012);
     expect(outputLatencyOf({ outputLatency: undefined, baseLatency: 0.012 })).toBe(0.012);
     expect(outputLatencyOf({ outputLatency: 0, baseLatency: 0.012 })).toBe(0.012);
@@ -379,7 +380,7 @@ describe('Audio music, on a fake AudioContext', () => {
     audio.setMusicVolume(0.25);
     expect((music as FakeGain).gain.value).toBe(0.25);
     advance(START_LEAD + 10);
-    expect(audio.songTime()).toBeCloseTo(40 - 0.04, 6);
+    expect(audio.songTime()).toBeCloseTo(40 - 0.04 - 0.01, 6);
   });
 
   it('pauses by stopping the source, not the context, so menu sounds still play', () => {

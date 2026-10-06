@@ -28,14 +28,15 @@ export interface LatencySource {
 }
 
 /**
- * How late the output is heard: outputLatency, else baseLatency (for browsers without outputLatency,
- * or that report 0 because they can't measure it), else 0.
+ * How late the output is heard: baseLatency (the context's own processing delay) plus outputLatency
+ * (from the audio subsystem to the speakers), the Web Audio spec's full output delay. A browser
+ * without outputLatency, or one that reports 0 because it can't measure it yet, gives baseLatency
+ * alone; neither gives 0.
  */
 export function outputLatencyOf(ctx: LatencySource): number {
   const { outputLatency: out, baseLatency: base } = ctx;
-  if (typeof out === 'number' && out > 0 && Number.isFinite(out)) return out;
-  if (typeof base === 'number' && base > 0 && Number.isFinite(base)) return base;
-  return 0;
+  const valid = (v: number | undefined): number => (typeof v === 'number' && v > 0 && Number.isFinite(v) ? v : 0);
+  return valid(base) + valid(out);
 }
 
 export type MusicState = 'stopped' | 'playing' | 'paused';
