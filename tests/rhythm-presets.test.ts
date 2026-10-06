@@ -22,7 +22,8 @@ describe('Mixed Style preset', () => {
   });
 
   it('matches the V5 weights and Targets per Bar', () => {
-    expect(MIXED.rows).toEqual({
+    const v5 = Object.fromEntries(SECTION_KINDS.map((kind) => [kind, { weights: MIXED.rows[kind].weights, perBar: MIXED.rows[kind].perBar }]));
+    expect(v5).toEqual({
       intro: { weights: { flick: 0.50, burst: 0, strafer: 0.20, hold: 0.30, peeker: 0, decoy: 0 }, perBar: { from: 1, to: 1 } },
       calm: { weights: { flick: 0.30, burst: 0, strafer: 0.20, hold: 0.30, peeker: 0.20, decoy: 0 }, perBar: { from: 2, to: 2 } },
       build: { weights: { flick: 0.35, burst: 0.20, strafer: 0.15, hold: 0, peeker: 0.20, decoy: 0.10 }, perBar: { from: 2, to: 4 } },
@@ -34,6 +35,12 @@ describe('Mixed Style preset', () => {
       expect(MIXED.rows[kind].weights.burst).toBe(0);
       expect(MIXED.rows[kind].weights.decoy).toBe(0);
     }
+  });
+
+  it('has D18\'s rhythmic feel: steady calm sections, driving builds and peaks, fills into peaks', () => {
+    const grids = Object.fromEntries(SECTION_KINDS.map((kind) => [kind, [MIXED.rows[kind].landGrid, MIXED.rows[kind].slotGrid]]));
+    expect(grids).toEqual({ intro: [1, 1], calm: [1, 1], build: [0.5, 1], peak: [0.5, 0.5], outro: [1, 1] });
+    expect(MIXED.fills).toBe(true);
   });
 
   it('offers only Mixed', () => {

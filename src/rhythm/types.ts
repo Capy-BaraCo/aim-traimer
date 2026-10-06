@@ -117,6 +117,13 @@ export interface PresetRow {
    * A Burst counts as one target.
    */
   perBar: { from: number; to: number };
+  /**
+   * Beats that landTime snaps to in this Section kind (D18): 1 = targets land on a beat (steady),
+   * 0.5 = they may land on the off-beat eighth (driving). The level's leadBeats is rounded to it.
+   */
+  landGrid: 1 | 0.5;
+  /** Beats that target beats sit on (D18): 1 = on the beat, 0.5 = also on the off-beat eighths. */
+  slotGrid: 1 | 0.5;
 }
 
 /**
@@ -145,6 +152,8 @@ export interface Preset {
   rows: Record<SectionKind, PresetRow>;
   /** Chance of each Flick shape when a flick is picked (D14); sums to 1. */
   flickShapes: Record<FlickShape, number>;
+  /** A fill in the bar before every peak: a burst of orbs on eighths into the peak's downbeat (D18). */
+  fills: boolean;
   params?: PresetParams;
 }
 
