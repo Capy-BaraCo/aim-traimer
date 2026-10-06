@@ -5,14 +5,16 @@ import { StrafeBrain, type Brain, type StrafeOptions } from '../world/brain';
 import { Engine } from '../world/engine';
 import { Figure, type HitPart } from '../world/figure';
 import { Fx } from '../world/fx';
+import type { Box } from '../world/collide';
 import { Mover } from '../world/movement';
 import { PALETTE } from '../world/palette';
+import { restoreColliders, swapColliders, Synthwave, type SynthwaveConfig } from '../world/synthwave';
 import { Viewmodel } from '../world/viewmodel';
 import { greek, Hud } from '../ui/hud';
 import { Audio } from './audio';
 import { Input } from './input';
 import { OW_YAW_DEG } from './sens';
-import type { Settings } from './store';
+import type { FxLevel, Settings } from './store';
 
 export interface WeaponSpec {
   name: string;
@@ -94,6 +96,10 @@ export class Game {
   /** While menus cover the backdrop, draw it at this rate instead of every frame (0 = every frame). */
   backdropFps = 0;
   private backdropT = 0;
+  /** Overdrive's scene, built on first use. Active between enterSynthwave() and exitSynthwave(). */
+  private synth: Synthwave | null = null;
+  private arenaColliders: Box[] | null = null;
+  private fxLevel: FxLevel = 'full';
 
   onPause: (paused: boolean) => void = () => {};
   /** Extra per-frame hook for screens that animate with the scene. */
@@ -121,6 +127,17 @@ export class Game {
       }
     };
     this.spawnAttractBots();
+    if (import.meta.env.DEV) {
+      // Dev only: `__synthwave(bpm = 120)` shows the synthwave scene on a fake beat clock; `.off()` undoes it.
+      const preview = (bpm = 120) => {
+        const t0 = performance.now();
+        const beats = Array.from({ length: Math.ceil((bpm * 3600) / 60) }, (_, i) => (i * 60) / bpm);
+        const walls = [-22, 18].map((bearing) => ({ bearing, distance: 14, width: 3.6, height: 3.2 }));
+        this.enterSynthwave({ songTime: () => (performance.now() - t0) / 1000, beats, walls });
+      };
+      preview.off = () => this.exitSynthwave();
+      (window as unknown as { __synthwave: typeof preview }).__synthwave = preview;
+    }
   }
 
   // ---------------------------------------------------------------- settings
@@ -131,6 +148,8 @@ export class Game {
     this.input.scale = s.inputScale;
     this.engine.setFov(s.fov);
     this.engine.setQuality(s.fx, s.renderScale);
+    this.fxLevel = s.fx;
+    this.synth?.setFx(s.fx);
     this.viewmodelOn = s.viewmodel;
     this.hud.setCrosshair(s.crosshair);
     this.hud.showFps(s.showFps);
@@ -246,6 +265,33 @@ export class Game {
     return best;
   }
 
+  // ---------------------------------------------------------------- synthwave scene (Overdrive)
+
+  get synthwaveActive(): boolean {
+    return this.synth?.active ?? false;
+  }
+
+  /**
+   * Swap the arena for the synthwave scene: arena meshes hidden, arena colliders replaced (in place)
+   * by the chart's walls. Always paired with exitSynthwave(), which exitPlay() and startDrill() call.
+   */
+  enterSynthwave(cfg: SynthwaveConfig): void {
+    this.exitSynthwave();
+    this.synth ??= new Synthwave(this.engine.scene);
+    this.synth.enter(cfg, this.fxLevel);
+    this.arenaColliders = swapColliders(this.arena.colliders, this.synth.wallBoxes);
+    this.arena.setHidden(true);
+  }
+
+  /** Bring the arena and its colliders back. Safe to call when the scene is not active. */
+  exitSynthwave(): void {
+    if (!this.synth?.active) return;
+    this.synth.leave();
+    if (this.arenaColliders) restoreColliders(this.arena.colliders, this.arenaColliders);
+    this.arenaColliders = null;
+    this.arena.setHidden(false);
+  }
+
   // ---------------------------------------------------------------- figures
 
   spawnHumanoid(x: number, z: number, brain?: Partial<StrafeOptions> | Brain, color = PALETTE.targetCore): Figure {
@@ -359,6 +405,7 @@ export class Game {
   }
 
   startDrill(drill: Drill, onDone: (r: DrillReport) => void, opts: { countdown?: number; label?: string } = {}): void {
+    this.exitSynthwave();
     if (this.drill) this.drill.teardown();
     if (this.mode === 'attract') this.clearFigures();
     this.mode = 'play';
@@ -390,6 +437,7 @@ export class Game {
 
   /** Leave play mode and go back to the idle scene. */
   exitPlay(): void {
+    this.exitSynthwave();
     if (this.drill) this.drill.teardown();
     this.drill = null;
     this.onDone = null;
@@ -524,7 +572,8 @@ export class Game {
     this.fx.update(dt);
     this.vm.update(dt, this.player.horizontalSpeed, this.player.onGround, this.player.crouchT, this.heat);
     this.engine.showViewmodel = this.mode === 'play' && !!this.weapon && this.viewmodelOn;
-    this.arena.update(dt, cam.position);
+    if (this.synth?.active) this.synth.update(dt, cam.position);
+    else this.arena.update(dt, cam.position);
   }
 
   /** Current attract-camera bearing, for the home screen readout. */

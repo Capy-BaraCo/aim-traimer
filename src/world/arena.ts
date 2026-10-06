@@ -62,8 +62,9 @@ export class Arena {
   private readonly groundUniforms = { uCam: { value: new Vector3() } };
   private readonly timeUniform = { value: 0 };
   readonly sun: DirectionalLight;
+  private saved: { fog: Scene['fog']; background: Scene['background'] } | null = null;
 
-  constructor(scene: Scene) {
+  constructor(private readonly scene: Scene) {
     scene.add(this.root);
     scene.fog = new FogExp2(PALETTE.fog.getHex(), 0.0062);
     scene.background = PALETTE.horizon.clone();
@@ -103,6 +104,26 @@ export class Arena {
     this.sky.position.copy(camPos);
     this.groundUniforms.uCam.value.copy(camPos);
     this.halo.rotation.z += dt * 0.012;
+  }
+
+  /**
+   * Hide or restore the whole arena for another scene (Overdrive's synthwave). Meshes, lights, sky,
+   * dust and halo live under `root`; fog and background live on the scene, so they are saved and
+   * put back. Colliders are swapped by the caller (see swapColliders in synthwave.ts).
+   */
+  setHidden(hidden: boolean): void {
+    const s = this.scene;
+    if (hidden === (this.saved !== null)) return;
+    this.root.visible = !hidden;
+    if (hidden) {
+      this.saved = { fog: s.fog, background: s.background };
+      s.fog = null;
+      s.background = null;
+    } else if (this.saved) {
+      s.fog = this.saved.fog;
+      s.background = this.saved.background;
+      this.saved = null;
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
