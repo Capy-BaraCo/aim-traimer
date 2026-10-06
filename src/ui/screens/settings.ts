@@ -1,8 +1,11 @@
 import { cmPer360, edpi, verticalFovFromOw } from '../../core/sens';
 import { DEFAULT_SETTINGS, store, type CrosshairStyle, type FxLevel, type Settings } from '../../core/store';
+import { CALIBRATION_CLICKS, OFFSET_LIMIT_MS, calibrationOffset, metronomeClicks } from '../../rhythm/calibrate';
 import { App } from '../app';
 import { actions, h, syncRange } from '../dom';
 import { crosshairSvg } from '../hud';
+
+const fmtOffset = (v: number): string => `${v > 0 ? '+' : ''}${v} ms`;
 
 const COLORS = ['#3dffc8', '#ffffff', '#ff4b1f', '#f7ff3c', '#ff3df2', '#27e0ff'];
 
@@ -61,6 +64,13 @@ App.register('settings', (app) => {
           ${row('Volume', '', range('volume', 0, 1, 0.05, s.volume, (v) => `${Math.round(v * 100)}%`))}
         </div>
         <div class="panel glass">
+          <h4><span>Rhythm timing</span><span>${fmtOffset(s.audioOffsetMs)}</span></h4>
+          ${row('Audio offset', 'How late you hear the music, in ms. Wireless headphones are often 100 ms or more late. Takes effect on your next run.', range('audioOffsetMs', -OFFSET_LIMIT_MS, OFFSET_LIMIT_MS, 1, s.audioOffsetMs, fmtOffset))}
+          <div class="actions" style="margin:4px 0 12px"><button class="btn small" data-act="rhythm-cal">Calibrate rhythm timing</button></div>
+          <p class="note" style="margin:0 0 14px">Click along with a metronome 16 times and the lab works the offset out for you.</p>
+          ${row('Beat strip', 'Overdrive shows upcoming targets as icons sliding along the bottom of the screen. Turn it off if it clutters the view.', sw('beatStrip', s.beatStrip))}
+        </div>
+        <div class="panel glass">
           <h4><span>Sound direction</span><span>${s.spatialAudio ? 'headphones' : 'speakers'}</span></h4>
           ${row('3D audio', 'On for headphones: sounds come from where the target is — left, right, ahead or behind. Off for speakers: left/right only.', sw('spatialAudio', s.spatialAudio))}
           ${row('Target sounds', 'A ping when a target appears. Used by Snap and calibration wide flicks. Echo always plays them.', sw('targetSounds', s.targetSounds))}
@@ -107,7 +117,13 @@ App.register('settings', (app) => {
     if (t.type === 'range') {
       syncRange(t);
       const lbl = t.nextElementSibling;
-      if (lbl) lbl.textContent = key === 'renderScale' || key === 'volume' ? `${Math.round(v * 100)}%` : key === 'inputScale' ? v.toFixed(2) : String(v);
+      if (lbl) lbl.textContent = key === 'audioOffsetMs' ? fmtOffset(v) : key === 'renderScale' || key === 'volume' ? `${Math.round(v * 100)}%` : key === 'inputScale' ? v.toFixed(2) : String(v);
+    }
+    if (key === 'audioOffsetMs') {
+      apply(key, Math.max(-OFFSET_LIMIT_MS, Math.min(OFFSET_LIMIT_MS, Math.round(v))));
+      const head = t.closest('.panel')?.querySelector('h4 span:last-child');
+      if (head) head.textContent = fmtOffset(store.settings.audioOffsetMs);
+      return;
     }
     if ((key === 'sens' && v > 0) || (key === 'dpi' && v >= 50) || (key !== 'sens' && key !== 'dpi')) apply(key, v);
     const prev = el.querySelector('.xhair-preview');
@@ -122,7 +138,113 @@ App.register('settings', (app) => {
     if (t.type === 'number') render();
   });
 
+  // ---- rhythm timing calibration: a metronome on the music clock, clicks read from songTime()
+  let cal: { stop: () => void } | null = null;
+
+  const closeCal = () => {
+    cal?.stop();
+    cal = null;
+    el.querySelector('.cal-overlay')?.remove();
+  };
+
+  const startCal = () => {
+    closeCal();
+    const audio = app.game.audio;
+    audio.unlock();
+    const sr = 44100; // the source resamples to the context rate
+    const track = metronomeClicks({ bpm: 100, beats: 24, sampleRate: sr, leadIn: 0.5 });
+    const buffer = new AudioBuffer({ length: track.samples.length, numberOfChannels: 1, sampleRate: sr });
+    buffer.copyToChannel(track.samples, 0);
+
+    const overlay = h(`<div class="cal-overlay" style="position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(5,8,12,.88)">
+      <div class="panel glass" style="width:min(460px,90vw);text-align:center;display:grid;gap:16px">
+        <h4><span>Calibrate rhythm timing</span><span data-cal="count">0 / ${CALIBRATION_CLICKS}</span></h4>
+        <p class="note" data-cal="msg" style="margin:0">Listen for the metronome, then click on every beat. The first few clicks are just you finding the beat.</p>
+        <button class="btn" data-cal="pad" style="padding:48px 0;font-size:20px">Click on every beat</button>
+        <div class="actions" style="justify-content:center" data-cal="btns"><button class="btn ghost small" data-cal="cancel">Cancel</button></div>
+      </div></div>`);
+    el.appendChild(overlay);
+    const q = (n: string) => overlay.querySelector<HTMLElement>(`[data-cal=${n}]`)!;
+
+    // The test is judged with the offset at 0, so it measures exactly what song time misses.
+    const saved = audio.audioOffsetMs;
+    audio.audioOffsetMs = 0;
+    const clicks: number[] = [];
+    let done = false;
+    let timer = 0;
+
+    const stop = () => {
+      done = true;
+      clearInterval(timer);
+      document.removeEventListener('keydown', onKey, true);
+      audio.stopMusic();
+      audio.audioOffsetMs = saved;
+    };
+    cal = { stop };
+
+    const finish = () => {
+      if (done) return;
+      stop();
+      const res = calibrationOffset(clicks, track.beats);
+      const btns = q('btns');
+      q('pad').hidden = true;
+      if (res.ok) {
+        const ms = res.offsetMs;
+        q('msg').textContent =
+          Math.abs(ms) < 5
+            ? 'Your timing is already spot on. No change needed.'
+            : ms > 0
+              ? `You hear the audio about ${ms} ms late. Targets will now arrive ${ms} ms later to match.`
+              : `You hear the audio about ${-ms} ms early. Targets will now arrive ${-ms} ms sooner to match.`;
+        btns.innerHTML = `<button class="btn small" data-cal="save">Save ${fmtOffset(ms)}</button><button class="btn ghost small" data-cal="retry">Try again</button><button class="btn ghost small" data-cal="cancel">Cancel</button>`;
+        btns.querySelector('[data-cal=save]')!.addEventListener('click', () => {
+          closeCal(); // restores the old offset first, so the saved one is what is left
+          apply('audioOffsetMs', ms);
+          render();
+          app.toast(`Audio offset set to ${fmtOffset(ms)}.`);
+        });
+      } else {
+        q('msg').textContent = 'That was too uneven to measure. Listen for the high click and the lower ones, keep a steady pace, and try again.';
+        btns.innerHTML = `<button class="btn small" data-cal="retry">Try again</button><button class="btn ghost small" data-cal="cancel">Cancel</button>`;
+      }
+      btns.querySelector('[data-cal=retry]')!.addEventListener('click', startCal);
+      btns.querySelector('[data-cal=cancel]')!.addEventListener('click', closeCal);
+    };
+
+    // mousedown (and keydown) is the instant, as with shots; song time is read right here
+    const tap = () => {
+      if (done || audio.musicState !== 'playing') return;
+      const t = audio.songTime();
+      if (t <= 0) return;
+      clicks.push(t);
+      q('count').textContent = `${clicks.length} / ${CALIBRATION_CLICKS}`;
+      if (clicks.length >= CALIBRATION_CLICKS) finish();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.key === 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      tap();
+    };
+    q('pad').addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      tap();
+    });
+    q('cancel').addEventListener('click', closeCal);
+    document.addEventListener('keydown', onKey, true);
+
+    if (!audio.playMusic(buffer, 0)) {
+      stop();
+      q('msg').textContent = 'Audio is not available yet. Click the button again.';
+      q('pad').hidden = true;
+      return;
+    }
+    // the track ending without 16 clicks still gives a result (or a try-again)
+    timer = window.setInterval(() => audio.musicEnded() && finish(), 100);
+  };
+
   actions(el, {
+    'rhythm-cal': startCal,
     seg: (b) => {
       const key = b.dataset.key!;
       apply(key, key === 'crosshair.style' ? (b.dataset.v as CrosshairStyle) : (b.dataset.v as FxLevel));
@@ -165,5 +287,5 @@ App.register('settings', (app) => {
   });
 
   render();
-  return { el };
+  return { el, destroy: closeCal };
 });

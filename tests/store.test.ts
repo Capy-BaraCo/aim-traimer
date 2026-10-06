@@ -38,3 +38,22 @@ describe('backup export / import', () => {
     expect(JSON.parse(store.exportJson()).profile).toEqual(JSON.parse(before).profile);
   });
 });
+
+describe('rhythm settings', () => {
+  it('default audioOffsetMs to 0 and beatStrip to on for older profiles', () => {
+    expect(store.importJson(JSON.stringify({ settings: { sens: 6 }, history: [] }))).toEqual({ ok: true });
+    expect(store.settings.audioOffsetMs).toBe(0);
+    expect(store.settings.beatStrip).toBe(true);
+  });
+
+  it('persist, and ride along in the backup export', () => {
+    store.setSettings({ audioOffsetMs: -35, beatStrip: false });
+    const backup = JSON.parse(store.exportJson());
+    expect(backup.profile.settings.audioOffsetMs).toBe(-35);
+    expect(backup.profile.settings.beatStrip).toBe(false);
+    store.setSettings({ audioOffsetMs: 0, beatStrip: true });
+    expect(store.importJson(JSON.stringify(backup))).toEqual({ ok: true });
+    expect(store.settings.audioOffsetMs).toBe(-35);
+    expect(store.settings.beatStrip).toBe(false);
+  });
+});

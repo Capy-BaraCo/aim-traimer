@@ -50,6 +50,10 @@ export interface Settings {
   targetSounds: boolean;
   /** Which sections a PSA sample contains. */
   calSections: { track: boolean; short: boolean; wide: boolean };
+  /** How late you hear the audio, in ms (−200..200). Subtracted in song time, so positive = targets arrive later. */
+  audioOffsetMs: number;
+  /** Overdrive's strip of upcoming targets at the bottom of the screen. */
+  beatStrip: boolean;
 }
 
 export interface CalibrationRecord {
@@ -130,6 +134,8 @@ export const DEFAULT_SETTINGS: Settings = {
   spatialAudio: true,
   targetSounds: true,
   calSections: { track: true, short: true, wide: true },
+  audioOffsetMs: 0,
+  beatStrip: true,
 };
 
 const KEY = 'azimuth.profile.v1';

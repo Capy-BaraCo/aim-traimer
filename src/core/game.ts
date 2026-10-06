@@ -157,6 +157,7 @@ export class Game {
     this.hud.setScopeEnabled(s.showScope);
     this.audio.setVolume(s.volume);
     this.audio.spatial = s.spatialAudio;
+    this.audio.audioOffsetMs = s.audioOffsetMs;
   }
 
   /** True when a world point is inside the current view (with `margin` of the half-screen, 1 = the edge). */
