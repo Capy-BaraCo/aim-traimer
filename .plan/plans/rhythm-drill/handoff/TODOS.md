@@ -1,6 +1,6 @@
 # Overdrive: coding-agent handoff
 
-Generated from plan `rhythm-drill` at seq 329 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
+Generated from plan `rhythm-drill` at seq 348 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
 
 Model pack (source of truth): `.plan/plans/rhythm-drill/out/model/`. Machine-readable copy of this list: `handoff/todos.json`.
 
@@ -221,14 +221,14 @@ Done when:
 - Read first: D4, D7, D12, D14, R2, V4, V5
 - Touches: `src/rhythm/generator.ts`, `tests/rhythm-generator.test.ts`
 
-src/rhythm/generator.ts: generate(analysis, structure, preset, level, songId) → Chart. PRNG (e.g. mulberry32) seeded by hash(songId, preset id, level). For each bar: take the section row, draw a count from perBar (ramped across build sections) × level density, choose slots on the row's slotGrid (beats, or eighths in peaks per D18) weighted by onset strength (burst orbs always on eighths), and sample each type from the row weights and each flick's shape from the shape split. Times: targetTime = the slot; landTime = targetTime − leadBeats, with leadBeats snapped to the row's landGrid (nearest whole or half beat, never below 1 beat, D18) and measured along the beat grid; launchTime = landTime − 1 beat; windowEnd = targetTime + afterBeats. Fills (D18, when preset.fills): the last bar before every peak section holds a burst of 3–5 orbs on consecutive eighths ending on the last eighth before the peak's first downbeat (3 orbs at level 1 rising to 5 at level 10), and a target from the peak row always lands on that downbeat; fills are exempt from the row weights but still respect maxConcurrent. Positions: on-screen spread within ±35° bearing and −10..+15° pitch at 10–18 m for most types; triangles 60–150° left or right; peekers get a Wall in chart.walls. Cap concurrent targets at maxConcurrent, and never overlap strafers or holds with each other. When analysis.confidence < 0.4 (R2), slots come from detected onset peaks instead of the beat grid, and there are no grids or fills. The chart ends at the song's end (D12).
+src/rhythm/generator.ts: generate(analysis, structure, preset, level, songId) → Chart. PRNG (e.g. mulberry32) seeded by hash(songId, preset id, level). Fun first (D19): the plan below is the starting point, and the generator should make charts that feel musical and varied, with creative licence to go further (repeated motifs within a section, call-and-response between left and right, rests in quiet moments, accents on the strongest onsets, syncopation in peaks, fills and flourishes at climactic moments, surprises at drops), so no two bars feel mechanical. Starting point: for each bar, take the section row, draw a count from perBar (ramped across build sections) × level density, choose slots on the row's slotGrid feel (beats, plus off-beat eighths in peaks, D18) weighted by onset strength (burst orbs on eighths), and sample each type from the row weights and each flick's shape from the shape split. Times: targetTime = the slot; landTime = targetTime − leadBeats, snapped to the row's landGrid feel (never below 1 beat) and measured along the beat grid; launchTime = landTime − 1 beat; windowEnd = targetTime + afterBeats. Fills (D18, when preset.fills): at least a run into every peak (e.g. 3–5 burst orbs on eighths into the peak's first downbeat, where a target lands), with more flourishes where the music builds. Positions: on-screen spread within about ±35° bearing and −10..+15° pitch at 10–18 m for most types; triangles 60–150° left or right; peekers get a Wall in chart.walls; movement patterns across the screen are part of the fun. Keep it readable: cap concurrent targets at maxConcurrent and never overlap strafers or holds with each other. When analysis.confidence < 0.4 (R2), slots come from detected onset peaks instead of the beat grid. The chart ends at the song's end (D12). Report every creative choice you made beyond this starting point.
 
 Done when:
 - [ ] The same inputs give a deep-equal chart; a different songId gives a different one.
-- [ ] Over a 200-bar synthetic song, type frequencies per section kind are within ±5% of the preset matrix (fills excluded).
-- [ ] For confident analyses every targetTime lies on its section's slot grid (a beat, or an eighth in peaks) and every burst orb on an eighth, within 1 ms; every landTime lies on its section's landing grid within 1 ms; for low-confidence analyses every targetTime lies on an onset peak.
-- [ ] Every peak section that follows another section is preceded by a fill bar, and a target lands on the peak's first downbeat.
-- [ ] Concurrent targets never exceed maxConcurrent, and no two strafer/hold targets overlap in time.
+- [ ] Over a 200-bar synthetic song, each section kind's type mix follows the preset matrix in spirit (within ±10%, fills and flourishes excluded).
+- [ ] Every target lands on something audible: for confident analyses every targetTime and burst orb is on the beat grid or its eighths within 1 ms; for low-confidence analyses on an onset peak.
+- [ ] Every peak that follows another section gets a fill or flourish leading into it.
+- [ ] Readable: concurrent targets never exceed maxConcurrent, and no two strafer/hold targets overlap in time.
 
 ### [ ] T9 · Decode and analyse songs off the main thread
 

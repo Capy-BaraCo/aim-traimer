@@ -30,7 +30,7 @@
 - Judgement words are Perfect (within the Perfect width of the target beat), Early (in the window, before that), Late (in the window, after it) and Miss (window ended).
 - Timing per target: launchTime = landTime − 1 beat (fly-in); landTime = targetTime − leadBeats; windowEnd = targetTime + afterBeats. leadBeats, afterBeats and the Perfect width come from the level table (T5).
 - Timing stats (mean signed offset in ms) come from hits, for the debrief and coach.
-**Affects:** G2 Targets land on the beat of the music., G3 Six target types each spawn on the beat, behave in time wit…, G5 It feels like a rhythm game, not a test: flowing, musical a…
+**Affects:** G2 Targets land on the beat of the music., G3 Six target types each spawn on the beat, behave in time wit…, G5 Fun first: it feels like a rhythm game and a warm-up you wa…
 **Do not propose:** On the beat only (strict ±60 ms); Before it's gone with no beat bonus
 
 ### D5 · How do you see when a target's beat is coming? — DECIDED
@@ -39,7 +39,7 @@
 **Consequences:**
 - Each cue needs its own timing on the shared chart clock; see V3 for the proposed choreography.
 - Four cues at once risk clutter on dense charts; see R3.
-**Affects:** G5 It feels like a rhythm game, not a test: flowing, musical a…, D4 Do you have to hit on the beat, or just before the target i…
+**Affects:** G5 Fun first: it feels like a rhythm game and a warm-up you wa…, D4 Do you have to hit on the beat, or just before the target i…
 
 ### D6 · What should the drill look like? — DECIDED
 **Outcome:** Synthwave grid: a retro sunset sky with a striped sun, mountains on the horizon and a neon grid floor that scrolls at the song's tempo. Neon targets read against the dark floor and sky.
@@ -47,7 +47,7 @@
 **Consequences:**
 - A new scene for this drill (sky, sun, mountains, grid floor) instead of the protractor arena. It reuses the existing Engine, renderer and post FX, and the existing camera, FOV and sensitivity maths stay unchanged.
 - The grid's scroll speed and the sun's glow follow the beat clock.
-**Affects:** G5 It feels like a rhythm game, not a test: flowing, musical a…
+**Affects:** G5 Fun first: it feels like a rhythm game and a warm-up you wa…
 **Do not propose:** Neon night arena; Existing Azimuth arena at dusk
 
 ### D7 · How are charts generated so that any song gets a good chart? — DECIDED
@@ -95,7 +95,7 @@
 ### D12 · How long is a run? — DECIDED
 **Outcome:** A run is the whole song, played to the end, with no length cap.
 **Why:** The human's comment: "just play till the end of the song".
-**Affects:** G5 It feels like a rhythm game, not a test: flowing, musical a…
+**Affects:** G5 Fun first: it feels like a rhythm game and a warm-up you wa…
 **Do not propose:** Cap long songs at about 6 minutes; Fixed length of about 2 minutes cut from the busiest part
 
 ### D13 · How does firing work across the target types? — DECIDED
@@ -131,9 +131,14 @@
 **Do not propose:** Keep Azimuth's global unlock chain for Overdrive
 
 ### D18 · How does the rhythm change across a song? — DECIDED
-**Outcome:** Each section kind has its own rhythmic feel, set in the style preset, so a song moves from steady to driving. Intro, calm and outro are steady: targets sit on the beat and land a whole number of beats before it. Build lands targets on half beats, so they arrive on the off-beat and the pace tightens. Peak is the busiest: targets may also sit on the off-beat eighths between beats, and they land on half beats. Fills: the last bar before every peak is a fill, a burst of 3–5 orbs on consecutive eighths running into the peak's first downbeat, where a target always lands. The level table's leadBeats stays smooth; the generator snaps it per section to that section's landing grid, never below 1 beat.
+**Outcome:** A starting feel, not a rule (D19). Each section kind has its own rhythmic feel, set in the style preset, so a song moves from steady to driving. Intro, calm and outro are steady: targets mostly sit on the beat and land a whole number of beats before it. Build lands targets on half beats, so they arrive on the off-beat and the pace tightens. Peak is the busiest: targets also use the off-beat eighths between beats, and land on half beats. Fills and flourishes at climactic moments: at least a run into every peak (e.g. a burst of orbs on eighths into the peak's first downbeat, where a target lands), and the generator may add more at drops and section changes. The level table's leadBeats stays smooth; the generator snaps it to the section's landing feel, never below 1 beat.
 **Why:** The human asked for a mix, half beats in one part and whole beats in the other, whichever is most dramatic, plus fills at climactic moments. Steady calm sections against syncopated, busier peaks gives the biggest contrast, and a drum-fill run into each peak builds tension into the drop.
 **Affects:** T5 Add the preset format, the Mixed preset and the level table, T6 Generate seeded charts from analysis, preset and level, D7 How are charts generated so that any song gets a good chart?, T19 Playtest and tune Mixed, the level table and the cues
+
+### D19 · How strictly should Overdrive follow the plan's rules? — DECIDED
+**Outcome:** Fun first. Overdrive is the playful step away from the rest of Azimuth's rigid, sweaty drills: a pre-game warm-up that gets you practising every aim skill through the music. The plan's rules on patterns, grids, target mix, choreography and look are starting points, not limits. Workers may go beyond them creatively (syncopation, repeated motifs, call-and-response, rests, fills and flourishes, accents on audible hits, surprises at drops, playful cues and juice) whenever it makes a run more fun and musical, and they say what they changed. What stays firm: targets are timed to something you can hear in the music (a beat, an off-beat or an onset), the screen stays readable, every target type still trains its aim skill, and the Do-not list holds.
+**Why:** The human: "no need for restrictions on beat timings that are anal, i'm looking for a creative output with soul. The rest of the app is essentially a sweaty aim trainer and it's awesome; this is a step away from rigid controls and instead a good fun way to warm up pre-game that forces you to practise the different aim skills in the process. Fun is our aim on this one. Don't strictly follow any rule that restricts creativity."
+**Affects:** G5 Fun first: it feels like a rhythm game and a warm-up you wa…, D18 How does the rhythm change across a song?, T6 Generate seeded charts from analysis, preset and level, T14 Add tap targets: flick shapes, bursts and decoys, T15 Add moving targets: strafers, holds and peekers, T16 Show the beat cues, combo and judgements, T19 Playtest and tune Mixed, the level table and the cues
 
 Which target types should be in the first version? Each one trains a different aim skill, and all of them spawn on the beat and vanish if missed. → Flick shapes, Peekers, Holds, Decoys, Bursts, Strafers
 
@@ -151,4 +156,4 @@ How should the rhythm drill fit with the daily warm-up (today: 7 drills in a row
 
 What should the drill be called? Azimuth drills have one-word names (Blink, Snap, Echo, Pin, Triad, Duelist…). → Overdrive
 
-_Generated by live-planner from plan "rhythm-drill" at seq 329. Change the plan and recompile; do not edit by hand._
+_Generated by live-planner from plan "rhythm-drill" at seq 348. Change the plan and recompile; do not edit by hand._
