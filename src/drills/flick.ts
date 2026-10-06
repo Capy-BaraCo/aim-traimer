@@ -5,7 +5,7 @@ import { mean, speedScore, speedScoreShort } from '../core/metrics';
 import { mmForDegrees } from '../core/sens';
 import { store } from '../core/store';
 import type { Figure } from '../world/figure';
-import { dirFrom, FlickRecorder, spawnFlickOrb, spawnOrbWhere, spawnScreenOrb, TargetSound } from './common';
+import { dirFrom, FlickRecorder, spawnFlickOrb, spawnOrbWhere, spawnScreenOrb, TargetSound, type Anchor } from './common';
 import { Drill, ms, pct, type DrillReport } from './drill';
 
 export interface FlickParams {
@@ -69,7 +69,13 @@ export class FlickDrill extends Drill {
 
   setup(): void {}
 
+  /** Short flicks stay in front of where you started (see keepsFrontal). */
+  private anchor: Anchor | null = null;
+
   override begin(): void {
+    const a = this.g.aimAngles();
+    // Any single flick from home fits the window; drift past it and the next target pulls you back.
+    this.anchor = { yaw: a.yaw, pitch: a.pitch, maxYaw: Math.max(20, this.p.maxDeg), maxPitch: Math.max(10, this.p.maxDeg * 0.6) };
     this.next();
   }
 
@@ -80,7 +86,7 @@ export class FlickDrill extends Drill {
     }
     const { minDeg, maxDeg, minDist, maxDist, radius } = this.p;
     this.current = this.p.screen
-      ? spawnScreenOrb(this.g, minDeg, maxDeg, minDist, maxDist, radius)
+      ? spawnScreenOrb(this.g, minDeg, maxDeg, minDist, maxDist, radius, this.anchor ?? undefined)
       : spawnFlickOrb(this.g, minDeg, maxDeg, minDist, maxDist, radius);
     this.rec.begin(this.g, this.current);
     if (!this.p.screen) this.sound.start(this.g, this.current);

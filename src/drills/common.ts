@@ -179,12 +179,29 @@ export function spawnFlickOrb(g: Game, minDeg: number, maxDeg: number, minDist: 
  * Spawn an orb that is already on screen, `minDeg`–`maxDeg` from the crosshair in any direction
  * (flatter than tall, like real fights). This is the short-range flick most Overwatch kills need.
  */
-export function spawnScreenOrb(g: Game, minDeg: number, maxDeg: number, minDist: number, maxDist: number, radius: number): Figure {
+/** Where a drill wants your view to stay: a home direction and how far you may drift from it (degrees). */
+export interface Anchor {
+  yaw: number;
+  pitch: number;
+  maxYaw: number;
+  maxPitch: number;
+}
+
+export function spawnScreenOrb(
+  g: Game,
+  minDeg: number,
+  maxDeg: number,
+  minDist: number,
+  maxDist: number,
+  radius: number,
+  anchor?: Anchor,
+): Figure {
   const cam = g.engine.camera;
   const vHalf = cam.fov / 2;
   const hHalf = (Math.atan(Math.tan((vHalf * Math.PI) / 180) * cam.aspect) * 180) / Math.PI;
   const aim = g.aimAngles();
-  return spawnOrbWhere(g, radius, 40, () => {
+  let tries = 0;
+  return spawnOrbWhere(g, radius, 60, () => {
     const off = minDeg + Math.random() * (maxDeg - minDeg);
     const ang = Math.random() * Math.PI * 2;
     let dx = Math.cos(ang);
@@ -194,8 +211,23 @@ export function spawnScreenOrb(g: Game, minDeg: number, maxDeg: number, minDist:
     dy = (dy / n) * off;
     const pitch = aim.pitch + dy;
     if (Math.abs(dx) > hHalf * 0.8 || Math.abs(dy) > vHalf * 0.75 || pitch < -10 || pitch > 30) return null;
+    // The frontal rule gets the first 30 proposals; after that, any on-screen spot will do.
+    if (anchor && ++tries <= 30 && !keepsFrontal(anchor, aim, aim.yaw + dx, pitch)) return null;
     return { dir: dirFrom(aim.yaw + dx, pitch), dist: minDist + Math.random() * (maxDist - minDist) };
   });
+}
+
+/**
+ * Keep a run of short flicks in front of you: a new target must stay inside the anchor window, or —
+ * if you've already drifted outside it — bring you back toward home. Without this, targets chain
+ * further and further to one side until you run out of mousepad.
+ */
+export function keepsFrontal(a: Anchor, aim: { yaw: number; pitch: number }, yaw: number, pitch: number): boolean {
+  const ok = (cur: number, next: number, home: number, max: number) => {
+    const d = Math.abs(next - home);
+    return d <= max || d < Math.abs(cur - home);
+  };
+  return ok(aim.yaw, yaw, a.yaw, a.maxYaw) && ok(aim.pitch, pitch, a.pitch, a.maxPitch);
 }
 
 /** Linear ramp across levels 1..10. */

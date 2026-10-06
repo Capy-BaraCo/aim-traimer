@@ -3,7 +3,7 @@ import { WEAPONS, type ShotResult } from '../core/game';
 import { trialScore, type Focus, type SectionFlickMetrics, type TrialMetrics } from '../core/metrics';
 import { bearingXZ } from '../world/arena';
 import type { Figure } from '../world/figure';
-import { FlickRecorder, spawnFlickOrb, spawnScreenOrb, TargetSound, TrackingProbe } from './common';
+import { FlickRecorder, spawnFlickOrb, spawnScreenOrb, TargetSound, TrackingProbe, type Anchor } from './common';
 import { Drill, ms, pct, type DrillReport } from './drill';
 
 export type Section = 'track' | 'short' | 'wide';
@@ -177,6 +177,17 @@ export class CalibrationTrial extends Drill {
     }
   }
 
+  private anchor: Anchor | null = null;
+
+  /** Short flicks stay in front of where the section started, so they never walk off your mousepad. */
+  private shortAnchor(): Anchor {
+    if (!this.anchor || this.shownInPhase === 0) {
+      const a = this.g.aimAngles();
+      this.anchor = { yaw: a.yaw, pitch: a.pitch, maxYaw: 26, maxPitch: 15 };
+    }
+    return this.anchor;
+  }
+
   private nextOrb(): void {
     const ph = this.phase as 'short' | 'wide';
     if (this.shownInPhase >= this.plan[ph]) {
@@ -185,7 +196,7 @@ export class CalibrationTrial extends Drill {
     }
     this.orb =
       ph === 'short'
-        ? spawnScreenOrb(this.g, 5, 26, 11, 17, RADIUS.short)
+        ? spawnScreenOrb(this.g, 5, 26, 11, 17, RADIUS.short, this.shortAnchor())
         : spawnFlickOrb(this.g, 35, 130, 10, 18, RADIUS.wide);
     this.rec.begin(this.g, this.orb);
     if (ph === 'wide') this.sound.start(this.g, this.orb);

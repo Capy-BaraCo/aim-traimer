@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { Game } from '../src/core/game';
-import { spawnFlickOrb, spawnOrbWhere, spawnScreenOrb } from '../src/drills/common';
+import { keepsFrontal, spawnFlickOrb, spawnOrbWhere, spawnScreenOrb } from '../src/drills/common';
 
 const EYE = new Vector3(0, 1.65, 0);
 const WALL_Z = -10;
@@ -62,5 +62,49 @@ describe('orb placement', () => {
       const d = v.length();
       expect(d).toBeLessThan(wallDistance(v.normalize()));
     }
+  });
+});
+
+describe('short flicks stay in front of you', () => {
+  /** An open arena; the crosshair snaps onto every target, like a perfect player. */
+  function chase(anchor?: { yaw: number; pitch: number; maxYaw: number; maxPitch: number }) {
+    const aim = { yaw: 0, pitch: 0 };
+    let worstYaw = 0;
+    let worstPitch = 0;
+    const g = {
+      eye: () => EYE.clone(),
+      aimAngles: () => ({ ...aim }),
+      aimDir: (out: Vector3) => out.set(0, 0, -1),
+      wallDistance: () => Infinity,
+      engine: { camera: { fov: 70.53, aspect: 16 / 9 } },
+      spawnOrb: (pos: Vector3) => {
+        const d = pos.clone().sub(EYE).normalize();
+        aim.yaw = (Math.atan2(d.x, -d.z) * 180) / Math.PI;
+        aim.pitch = (Math.asin(d.y) * 180) / Math.PI;
+        worstYaw = Math.max(worstYaw, Math.abs(aim.yaw));
+        worstPitch = Math.max(worstPitch, Math.abs(aim.pitch));
+        return {};
+      },
+    } as unknown as Game;
+    for (let i = 0; i < 400; i++) spawnScreenOrb(g, 8, 32, 11, 17, 0.2, anchor);
+    return { worstYaw, worstPitch };
+  }
+
+  it('without an anchor, targets can walk you far round to the side', () => {
+    expect(chase().worstYaw).toBeGreaterThan(60);
+  });
+
+  it('with an anchor, your view stays roughly frontal', () => {
+    const r = chase({ yaw: 0, pitch: 0, maxYaw: 32, maxPitch: 19 });
+    // Every target lands inside the window, so 400 flicks later you are still facing forward.
+    expect(r.worstYaw).toBeLessThanOrEqual(32 + 1e-6);
+    expect(r.worstPitch).toBeLessThanOrEqual(19 + 1e-6);
+  });
+
+  it('a target outside the window must bring you back toward home', () => {
+    const a = { yaw: 0, pitch: 0, maxYaw: 20, maxPitch: 10 };
+    expect(keepsFrontal(a, { yaw: 30, pitch: 0 }, 40, 0)).toBe(false);
+    expect(keepsFrontal(a, { yaw: 30, pitch: 0 }, 25, 0)).toBe(true);
+    expect(keepsFrontal(a, { yaw: 0, pitch: 0 }, 18, 5)).toBe(true);
   });
 });
