@@ -123,6 +123,7 @@ export class Game {
       if (this.mode !== 'play') return;
       if (!locked && !this.paused && this.run !== 'done') {
         this.paused = true;
+        this.audio.pauseMusic();
         this.onPause(true);
       }
     };
@@ -407,6 +408,7 @@ export class Game {
   startDrill(drill: Drill, onDone: (r: DrillReport) => void, opts: { countdown?: number; label?: string } = {}): void {
     this.exitSynthwave();
     if (this.drill) this.drill.teardown();
+    this.audio.stopMusic();
     if (this.mode === 'attract') this.clearFigures();
     this.mode = 'play';
     this.paused = false;
@@ -432,6 +434,7 @@ export class Game {
   resume(): void {
     this.paused = false;
     this.last = performance.now();
+    this.audio.resumeMusic();
     this.onPause(false);
   }
 
@@ -439,6 +442,7 @@ export class Game {
   exitPlay(): void {
     this.exitSynthwave();
     if (this.drill) this.drill.teardown();
+    this.audio.stopMusic();
     this.drill = null;
     this.onDone = null;
     this.run = 'idle';
@@ -459,6 +463,7 @@ export class Game {
     this.run = 'done';
     const report = drill.report();
     drill.teardown();
+    this.audio.stopMusic();
     this.drill = null;
     this.hud.message('');
     const cb = this.onDone;
