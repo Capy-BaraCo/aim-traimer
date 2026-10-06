@@ -1,6 +1,6 @@
 # Overdrive: coding-agent handoff
 
-Generated from plan `rhythm-drill` at seq 352 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
+Generated from plan `rhythm-drill` at seq 354 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
 
 Model pack (source of truth): `.plan/plans/rhythm-drill/out/model/`. Machine-readable copy of this list: `handoff/todos.json`.
 
@@ -235,7 +235,7 @@ Done when:
 - wave 5 · Sonnet · size M: Vite module worker + cache wiring.
 - Depends on: T3, T4, T8 · Implements: G1
 - Read first: D3, V1
-- Touches: `src/rhythm/worker.ts`, `src/core/songs.ts`
+- Touches: `src/rhythm/worker.ts`, `src/core/songs.ts`, `src/core/audio.ts`
 
 Decode with AudioContext.decodeAudioData on the main thread, downmix to mono and transfer the samples to src/rhythm/worker.ts (a Vite module worker: new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })). The worker runs analyse() then structure() and posts progress. Cache {analysis, structure} in the song library under the song id, but on load always recompute the Structure from the cached Analysis with structure() (about 20 ms), so sections retuned later (T19) apply to songs already in the library. If the cached analysis.version differs from ANALYSIS_VERSION, re-analyse.
 
