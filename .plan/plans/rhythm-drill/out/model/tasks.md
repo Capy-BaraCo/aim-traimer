@@ -12,14 +12,14 @@
   - [x] Comments on each type cite the glossary term it implements (Song, Chart, Style preset, Target, Target beat, Hit window).
 
 ### T2 · Write a test-only song generator with known beats and sections
-- 1 · Chart logic (pure) · S · todo
+- 1 · Chart logic (pure) · S · done
 - Depends on: T1
 - Implements: G2
 - Touches: tests/helpers/songgen.ts
 - Context: tests/helpers/songgen.ts: a pure, seeded function (bpm, sampleRate, bars, section energies, swing, noise level, quiet intro, optional tempo ramp) → { pcm: Float32Array, beats: number[], sections }. Kick, snare and hat from sine and noise envelopes. Test fixture only (D11).
 - Done when:
-  - [ ] Generates deterministic loops from 70 to 190 BPM, with swing, noise and a quiet intro, plus the true beat times and section boundaries.
-  - [ ] Nothing under src/ imports it, and it is not bundled by `npm run build`.
+  - [x] Generates deterministic loops from 70 to 190 BPM, with swing, noise and a quiet intro, plus the true beat times and section boundaries.
+  - [x] Nothing under src/ imports it, and it is not bundled by `npm run build`.
 
 ### T3 · Detect tempo, beats and onsets from PCM
 - 1 · Chart logic (pure) · L · todo
@@ -46,55 +46,57 @@
   - [ ] Every section is at least 4 bars and starts on a bar boundary.
 
 ### T5 · Add the preset format, the Mixed preset and the level table
-- 1 · Chart logic (pure) · M · todo
+- 1 · Chart logic (pure) · M · done
 - Depends on: T1
 - Implements: G1, G4
-- Touches: src/rhythm/presets.ts, src/rhythm/levels.ts, tests/rhythm-presets.test.ts
-- Context: src/rhythm/presets.ts: MIXED, with the matrix, targets per bar and flick shape split exactly as in V5's caption. src/rhythm/levels.ts: LEVELS[1..10] with starting values to be tuned in T19, interpolating linearly between L1 and L10: leadBeats (land → target beat) 2.0→1.0; afterBeats (target beat → window end) 1.5→0.5; perfectMs (± around the target beat) 90→45; density multiplier 0.5→1.25; maxConcurrent 2→5; target radius 0.40→0.24 m (diamonds ×0.6); strafer speed (StyleTuning.speed) 0.6→1.0; strafer health 60→160; strafer life 8 beats; hold length 4→2 beats; peeker shows for 1 beat. Fly-in is always 1 beat. Effective target params = level value × preset multiplier (default 1). Difficulty bands: Easy 1–3, Normal 4–6, Hard 7–8, Expert 9–10. unlockedInBand(progress, difficulty) implements D17 (the band's first level, plus one per consecutive starred level from there, capped at the band's top); levelFor(difficulty, progress) returns that level (D10 + D17).
+- Touches: src/rhythm/types.ts, src/rhythm/presets.ts, src/rhythm/levels.ts, tests/rhythm-presets.test.ts
+- Context: src/rhythm/presets.ts: MIXED, with the matrix, targets per bar and flick shape split exactly as in V5's caption, plus the rhythmic feel per section kind (D18): each PresetRow has landGrid (beats that landTime snaps to: 1 in intro, calm and outro; 0.5 in build and peak) and slotGrid (the grid target beats sit on: 1, except 0.5 in peak), and the preset has fills: true (a fill in the bar before every peak). These fields are added to PresetRow and Preset in src/rhythm/types.ts. src/rhythm/levels.ts: LEVELS[1..10] with starting values to be tuned in T19, interpolating linearly between L1 and L10: leadBeats (land → target beat) 2.0→1.0; afterBeats (target beat → window end) 1.5→0.5; perfectMs (± around the target beat) 90→45; density multiplier 0.5→1.25; maxConcurrent 2→5; target radius 0.40→0.24 m (diamonds ×0.6); strafer speed (StyleTuning.speed) 0.6→1.0; strafer health 60→160; strafer life 8 beats; hold length 4→2 beats; peeker shows for 1 beat. Fly-in is always 1 beat. Effective target params = level value × preset multiplier (default 1). Difficulty bands: Easy 1–3, Normal 4–6, Hard 7–8, Expert 9–10. unlockedInBand(progress, difficulty) implements D17 (the band's first level, plus one per consecutive starred level from there, capped at the band's top); levelFor(difficulty, progress) returns that level (D10 + D17).
 - Done when:
-  - [ ] Each Mixed row's weights, and the flick shape split, sum to 1 (test).
-  - [ ] levelFor gives 7 for Hard with no stars, 8 after a star on 7, and never leaves the band (test).
-  - [ ] Across levels leadBeats, afterBeats and perfectMs never grow and density never drops (test).
-  - [ ] Only Mixed is listed as a selectable preset (D8).
+  - [x] Each Mixed row's weights, and the flick shape split, sum to 1 (test).
+  - [x] levelFor gives 7 for Hard with no stars, 8 after a star on 7, and never leaves the band (test).
+  - [x] Across levels leadBeats, afterBeats and perfectMs never grow and density never drops (test).
+  - [x] Only Mixed is listed as a selectable preset (D8).
+  - [x] Mixed's landGrid and slotGrid per section kind and fills match D18 (test).
 
 ### T6 · Generate seeded charts from analysis, preset and level
 - 1 · Chart logic (pure) · L · todo
 - Depends on: T4, T5
 - Implements: G1, G3
 - Touches: src/rhythm/generator.ts, tests/rhythm-generator.test.ts
-- Context: src/rhythm/generator.ts: generate(analysis, structure, preset, level, songId) → Chart. PRNG (e.g. mulberry32) seeded by hash(songId, preset id, level). For each bar: take the section row, draw a count from perBar (ramped across build sections) × level density, choose slots weighted by onset strength (on beats; burst orbs on eighths), and sample each type from the row weights and each flick's shape from the shape split. Times: targetTime = the slot; landTime = targetTime − leadBeats; launchTime = landTime − 1 beat; windowEnd = targetTime + afterBeats. Positions: on-screen spread within ±35° bearing and −10..+15° pitch at 10–18 m for most types; triangles 60–150° left or right; peekers get a Wall in chart.walls. Cap concurrent targets at maxConcurrent, and never overlap strafers or holds with each other. When analysis.confidence < 0.4 (R2), slots come from detected onset peaks instead of the beat grid. The chart ends at the song's end (D12).
+- Context: src/rhythm/generator.ts: generate(analysis, structure, preset, level, songId) → Chart. PRNG (e.g. mulberry32) seeded by hash(songId, preset id, level). For each bar: take the section row, draw a count from perBar (ramped across build sections) × level density, choose slots on the row's slotGrid (beats, or eighths in peaks per D18) weighted by onset strength (burst orbs always on eighths), and sample each type from the row weights and each flick's shape from the shape split. Times: targetTime = the slot; landTime = targetTime − leadBeats, with leadBeats snapped to the row's landGrid (nearest whole or half beat, never below 1 beat, D18) and measured along the beat grid; launchTime = landTime − 1 beat; windowEnd = targetTime + afterBeats. Fills (D18, when preset.fills): the last bar before every peak section holds a burst of 3–5 orbs on consecutive eighths ending on the last eighth before the peak's first downbeat (3 orbs at level 1 rising to 5 at level 10), and a target from the peak row always lands on that downbeat; fills are exempt from the row weights but still respect maxConcurrent. Positions: on-screen spread within ±35° bearing and −10..+15° pitch at 10–18 m for most types; triangles 60–150° left or right; peekers get a Wall in chart.walls. Cap concurrent targets at maxConcurrent, and never overlap strafers or holds with each other. When analysis.confidence < 0.4 (R2), slots come from detected onset peaks instead of the beat grid, and there are no grids or fills. The chart ends at the song's end (D12).
 - Done when:
   - [ ] The same inputs give a deep-equal chart; a different songId gives a different one.
-  - [ ] Over a 200-bar synthetic song, type frequencies per section kind are within ±5% of the preset matrix.
-  - [ ] For confident analyses every targetTime lies on a beat (an eighth for burst orbs) within 1 ms; for low-confidence analyses every targetTime lies on an onset peak.
+  - [ ] Over a 200-bar synthetic song, type frequencies per section kind are within ±5% of the preset matrix (fills excluded).
+  - [ ] For confident analyses every targetTime lies on its section's slot grid (a beat, or an eighth in peaks) and every burst orb on an eighth, within 1 ms; every landTime lies on its section's landing grid within 1 ms; for low-confidence analyses every targetTime lies on an onset peak.
+  - [ ] Every peak section that follows another section is preceded by a fill bar, and a target lands on the peak's first downbeat.
   - [ ] Concurrent targets never exceed maxConcurrent, and no two strafer/hold targets overlap in time.
 
 ### T7 · Judge hits, track the combo and compute the 0–100 score
-- 1 · Chart logic (pure) · M · todo
+- 1 · Chart logic (pure) · M · done
 - Depends on: T5
 - Implements: G4, G5
 - Touches: src/rhythm/scoring.ts, tests/rhythm-scoring.test.ts
 - Context: src/rhythm/scoring.ts: judge(songTimeOfClick, target, level) → perfect | early | late | miss, plus a signed offset in ms (D4 consequences). Combo and multiplier ×1→×4, stepping up every 8 combo points; Perfect adds 2, Early or Late adds 1, Miss resets. Decoys: a hit resets the combo and costs points; leaving one alone is neutral; decoys are left out of hit rate and vanish with no Miss. Burst hit rate counts each orb. Strafers and holds score the fraction of their life spent on target while firing; under 30% counts as a miss for the combo. Final 0–100 score plus stats: mean signed offset, hit rate per target type and max combo.
 - Done when:
-  - [ ] Unit tests cover perfect, early, late and miss at the window and Perfect boundaries.
-  - [ ] Perfect hits raise the multiplier faster than early or late hits (test).
-  - [ ] A decoy hit resets the combo; an ignored decoy changes nothing (test).
-  - [ ] The score stays within 0–100 and never drops when a miss becomes a hit (test).
+  - [x] Unit tests cover perfect, early, late and miss at the window and Perfect boundaries.
+  - [x] Perfect hits raise the multiplier faster than early or late hits (test).
+  - [x] A decoy hit resets the combo; an ignored decoy changes nothing (test).
+  - [x] The score stays within 0–100 and never drops when a miss becomes a hit (test).
 
 ## 2 · Songs & audio
 
 ### T8 · Store songs in an IndexedDB library
-- 2 · Songs & audio · M · todo
+- 2 · Songs & audio · M · done
 - Depends on: T1
 - Implements: G1
 - Touches: src/core/songs.ts
 - Context: src/core/songs.ts: an IndexedDB store holding audio Blobs, SongMeta and cached analysis. add(file) hashes the bytes (crypto.subtle SHA-256) so duplicates collapse; list(), get(id), remove(id), saveAnalysis(id, …), setPresets(id, preset, difficulty). Errors become plain words. Kept out of the localStorage profile and the backup export.
 - Done when:
-  - [ ] Adding the same file twice keeps one entry.
-  - [ ] Songs, their presets and cached analysis survive a reload.
-  - [ ] Deleting a song removes its blob and its analysis.
-  - [ ] The Settings backup export contains no audio.
-  - [ ] A quota error shows: "Your browser is out of space for songs. Delete one and try again."
+  - [x] Adding the same file twice keeps one entry.
+  - [x] Songs, their presets and cached analysis survive a reload.
+  - [x] Deleting a song removes its blob and its analysis.
+  - [x] The Settings backup export contains no audio.
+  - [x] A quota error shows: "Your browser is out of space for songs. Delete one and try again."
 
 ### T9 · Decode and analyse songs off the main thread
 - 2 · Songs & audio · M · todo
@@ -119,15 +121,15 @@
   - [x] Works in browsers without outputLatency (falls back to baseLatency alone).
 
 ### T11 · Add the audio offset calibration and settings
-- 2 · Songs & audio · M · todo
+- 2 · Songs & audio · M · done
 - Depends on: T10
 - Implements: G2
 - Touches: src/core/store.ts, src/core/game.ts, src/ui/screens/settings.ts, src/rhythm/calibrate.ts, tests/rhythm-calibrate.test.ts
 - Context: New settings audioOffsetMs (default 0) and beatStrip (default on). Game.applySettings passes audioOffsetMs to the Audio class (audio.audioOffsetMs, from T10). Settings → audio gets "Calibrate rhythm timing": a metronome at 100 BPM played on the music clock (T10's playMusic with a generated click buffer), with clicks judged by songTime() while the offset is held at 0, so the calibration measures exactly what song time misses; the player clicks along 16 times. Take each click minus its nearest beat, drop the first 4 and any outside ±250 ms, and the median becomes audioOffsetMs (positive = the player hears audio late, so targets arrive later; see the glossary). Plus a manual slider from −200 to +200 ms. The pure helper lives in src/rhythm/calibrate.ts.
 - Done when:
-  - [ ] Both settings persist and are included in the backup export.
-  - [ ] The helper recovers a simulated fixed latency of +80 ms within ±10 ms, with jittered clicks (test).
-  - [ ] Changing the slider takes effect on the next run.
+  - [x] Both settings persist and are included in the backup export.
+  - [x] The helper recovers a simulated fixed latency of +80 ms within ±10 ms, with jittered clicks (test).
+  - [x] Changing the slider takes effect on the next run.
 
 ## 3 · Play
 
@@ -221,10 +223,10 @@
 - Depends on: T14, T15, T16, T17, T18, T11, T12
 - Implements: G5, G2
 - Touches: src/rhythm/presets.ts, src/rhythm/levels.ts
-- Context: Play at least three of the human's own songs (different tempos and genres) on Easy and Expert. Tune matrix weights, densities, window and Perfect widths, and cue contrast, and note the findings in the PR.
+- Context: Play at least three of the human's own songs (different tempos and genres) on Easy and Expert. Tune matrix weights, densities, window and Perfect widths, the per-section rhythmic feel and fills (D18), and cue contrast, and note the findings in the PR.
 - Done when:
   - [ ] The human plays it on their own songs and says it feels on-beat and fun (G5).
   - [ ] No target is unreadable at Expert on a fast song.
   - [ ] The tuned values are committed in presets.ts and levels.ts, and `npm test` is green.
 
-_Generated by live-planner from plan "rhythm-drill" at seq 315. Change the plan and recompile; do not edit by hand._
+_Generated by live-planner from plan "rhythm-drill" at seq 329. Change the plan and recompile; do not edit by hand._
