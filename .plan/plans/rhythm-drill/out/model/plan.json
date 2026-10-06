@@ -6,7 +6,7 @@
     "recipe": "next-feature",
     "createdAt": "2026-10-06T06:13:29.161Z"
   },
-  "seq": 348,
+  "seq": 352,
   "elements": [
     {
       "id": "el_81fo6wc1",
@@ -1593,7 +1593,7 @@
           "tests/rhythm-analysis.test.ts"
         ],
         "size": "L",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1617,7 +1617,7 @@
           "tests/rhythm-sections.test.ts"
         ],
         "size": "M",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1728,7 +1728,7 @@
       "title": "Decode and analyse songs off the main thread",
       "data": {
         "title": "Decode and analyse songs off the main thread",
-        "description": "Decode with AudioContext.decodeAudioData on the main thread, downmix to mono and transfer the samples to src/rhythm/worker.ts (a Vite module worker: new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })). The worker runs analyse() then structure() and posts progress. Cache {analysis, structure} in the song library under the song id. If the cached analysis.version differs from ANALYSIS_VERSION, re-analyse.",
+        "description": "Decode with AudioContext.decodeAudioData on the main thread, downmix to mono and transfer the samples to src/rhythm/worker.ts (a Vite module worker: new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })). The worker runs analyse() then structure() and posts progress. Cache {analysis, structure} in the song library under the song id, but on load always recompute the Structure from the cached Analysis with structure() (about 20 ms), so sections retuned later (T19) apply to songs already in the library. If the cached analysis.version differs from ANALYSIS_VERSION, re-analyse.",
         "doneWhen": [
           "A 4-minute MP3 is ready to play within 5 s of being added on a mid-range laptop.",
           "No main-thread task longer than 100 ms while analysis runs (DevTools Performance).",
