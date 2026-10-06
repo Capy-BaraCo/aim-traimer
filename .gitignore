@@ -3,3 +3,7 @@ dist
 *.log
 .DS_Store
 .vite
+
+# live-planner runtime state
+.plan/server.json
+.plan/plans/*/agent-cursor.json
