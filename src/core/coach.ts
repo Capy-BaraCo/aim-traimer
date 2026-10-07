@@ -453,6 +453,40 @@ export function hearingFindings(e: EchoSummary): Finding[] {
   return out;
 }
 
+/** The headshot trade-off: heads pay double, misses pay nothing. */
+export function shootingFindings(s: { shots: number; accuracy: number; headRate: number; efficiency: number }): Finding[] {
+  const out: Finding[] = [];
+  if (s.shots < 20) return out;
+  if (s.headRate >= 0.3 && s.accuracy < 0.35)
+    out.push({
+      id: 'head-greed',
+      kind: 'fix',
+      weight: 0.75 + (0.35 - s.accuracy),
+      title: 'Going for heads is costing you',
+      body: `${pct(s.headRate)} of your hits were headshots, but only ${pct(s.accuracy)} of your bullets hit at all. A miss deals nothing, so right now you'd do more damage aiming at the chest.`,
+      tip: 'Aim at the upper chest until you hit most of your shots. Then nudge your aim up to the head.',
+    });
+  else if (s.accuracy >= 0.55 && s.headRate < 0.15)
+    out.push({
+      id: 'aim-higher',
+      kind: 'fix',
+      weight: 0.55,
+      title: 'You can afford to aim higher',
+      body: `You hit ${pct(s.accuracy)} of your bullets, but only ${pct(s.headRate)} of hits were heads. A headshot does double damage, so even if your accuracy drops a little, you'll deal more.`,
+      tip: "Track the neck rather than the chest: the misses go into the body, and the hits go into the head.",
+    });
+  if (s.efficiency >= 1 && s.headRate >= 0.25)
+    out.push({
+      id: 'heads-pay',
+      kind: 'good',
+      weight: 0.7,
+      title: 'Your headshots are paying off',
+      body: `You dealt ${pct(s.efficiency)} of all-body-shot damage: the headshots more than covered your misses.`,
+      tip: 'Keep the same height, try a harder level.',
+    });
+  return out;
+}
+
 export function feedback(findings: readonly Finding[]): { good: Finding | null; fixes: Finding[]; next: DrillId | null } {
   const sorted = [...findings].sort((a, b) => b.weight - a.weight);
   const fixes = sorted.filter((f) => f.kind === 'fix').slice(0, 2);

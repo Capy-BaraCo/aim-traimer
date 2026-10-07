@@ -4,7 +4,10 @@ import { store } from '../core/store';
 import { bearingXZ } from '../world/arena';
 import { Drill, pct, type DrillReport } from './drill';
 
-/** Free Range — sandbox. Live sensitivity nudging with [ and ], weapon swap with 1 / 2. */
+/** Number keys 1–5 in the free range. */
+const RANGE_WEAPONS = ['pulse', 'rail', 'pistols', 'peacekeeper', 'viper'] as const;
+
+/** Free Range — sandbox. Live sensitivity nudging with [ and ], weapon swap with 1–5. */
 export class FreeRangeDrill extends Drill {
   readonly id = 'range';
   readonly title = 'Free Range';
@@ -27,7 +30,7 @@ export class FreeRangeDrill extends Drill {
       [42, 22],
     ] as const)
       this.spawnAt(b, d);
-    this.g.hud.setPhase('[ / ] sens · 1 / 2 weapon · R reset bots');
+    this.g.hud.setPhase('[ / ] sens · 1–5 weapon · RMB scope · R reset bots');
   }
 
   private spawnAt(b = -60 + Math.random() * 120, d = 8 + Math.random() * 16): void {
@@ -42,12 +45,11 @@ export class FreeRangeDrill extends Drill {
       g.sens = Math.max(0.01, roundSens(g.sens + (code === 'BracketRight' ? 0.05 : -0.05)));
       this.liveSens = g.sens;
       g.hud.flashToast(`SENS ${g.sens.toFixed(2)}`, 'info');
-    } else if (code === 'Digit1') {
-      g.weapon = WEAPONS.pulse;
-      g.hud.flashToast('PULSE · AUTO', 'info');
-    } else if (code === 'Digit2') {
-      g.weapon = WEAPONS.rail;
-      g.hud.flashToast('RAIL · SEMI', 'info');
+    } else if (/^Digit[1-5]$/.test(code)) {
+      const w = WEAPONS[RANGE_WEAPONS[Number(code.slice(5)) - 1]];
+      g.weapon = w;
+      g.setScoped(false);
+      g.hud.flashToast(`${w.name.toUpperCase()} · ${w.hero.toUpperCase()}`, 'info');
     } else if (code === 'KeyR') {
       g.clearFigures();
       this.respawn = [];

@@ -1,4 +1,5 @@
 import type { EchoRecord, FlickRecord } from '../core/analytics';
+import type { ShootingFacts } from './common';
 import { LiveCoach, type TrackingFacts } from '../core/coach';
 import type { Game, ShotResult, WeaponSpec } from '../core/game';
 import { store } from '../core/store';
@@ -21,6 +22,8 @@ export interface DrillAnalytics {
   movement?: { moving: number };
   /** Echo: where each sound came from and which way you turned. */
   hearing?: EchoRecord[];
+  /** Every bullet against moving enemies: accuracy, headshots, damage efficiency. */
+  shooting?: ShootingFacts;
 }
 
 export interface DrillReport {

@@ -95,8 +95,23 @@ export class Engine {
     window.addEventListener('resize', () => this.resize());
   }
 
+  private baseFov = 70.53;
+  private zoom = 1;
+
   setFov(owHorizontalFov: number): void {
-    this.camera.fov = verticalFovFromOw(owHorizontalFov);
+    this.baseFov = verticalFovFromOw(owHorizontalFov);
+    this.applyFov();
+  }
+
+  /** Scope zoom: 1 = normal, 1.5 = everything looks 1.5× bigger. */
+  setZoom(zoom: number): void {
+    this.zoom = zoom;
+    this.applyFov();
+  }
+
+  private applyFov(): void {
+    const half = (this.baseFov * Math.PI) / 360;
+    this.camera.fov = (Math.atan(Math.tan(half) / this.zoom) * 360) / Math.PI;
     this.camera.updateProjectionMatrix();
   }
 

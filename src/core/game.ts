@@ -13,22 +13,9 @@ import { Audio } from './audio';
 import { Input } from './input';
 import { OW_YAW_DEG } from './sens';
 import { isHex, type Settings } from './store';
+import { falloffAt, spreadOffset, WEAPONS, type FireMode, type WeaponSpec } from './weapons';
 
-export interface WeaponSpec {
-  name: string;
-  auto: boolean;
-  /** Shots per second. */
-  rate: number;
-  body: number;
-  head: number;
-}
-
-export const WEAPONS = {
-  /** Soldier-style automatic hitscan: 10 rounds/s, crits ×2. */
-  pulse: { name: 'Pulse', auto: true, rate: 10, body: 20, head: 40 } satisfies WeaponSpec,
-  /** Cassidy-style semi-auto hitscan. */
-  rail: { name: 'Rail', auto: false, rate: 3.2, body: 70, head: 140 } satisfies WeaponSpec,
-};
+export { WEAPONS, type WeaponSpec } from './weapons';
 
 export interface ShotResult {
   figure: Figure | null;
@@ -37,6 +24,10 @@ export interface ShotResult {
   kill: boolean;
   /** Seconds on the game clock when the shot was taken. */
   at: number;
+  /** Damage this bullet dealt (0 on a miss, after fall-off and head multiplier). */
+  damage: number;
+  /** The fire mode it was shot in (hip or scoped). */
+  mode: FireMode;
 }
 
 type RunState = 'idle' | 'countdown' | 'running' | 'done';
@@ -45,6 +36,7 @@ const DEG = Math.PI / 180;
 const _v = new Vector3();
 const _d = new Vector3();
 const _o = new Vector3();
+const _spr = new Vector3();
 const _fw = new Vector3();
 const _up = new Vector3();
 // onScreen() is called from inside drill updates, so it must not borrow the loop's scratch vectors.
@@ -85,6 +77,13 @@ export class Game {
   viewmodelOn = true;
   private cooldown = 0;
   private heat = 0;
+  /** Extra spread built up by sustained fire (degrees). */
+  private bloom = 0;
+  /** Aiming down sights (right mouse, weapons with a scope). */
+  scoped = false;
+  /** Scoped sensitivity as a fraction of hip-fire sensitivity. */
+  scopedSens = 0.67;
+  private lastHitSound = 0;
   private countdown = 0;
   private countdownLabel = '';
   private lastCount = -1;
@@ -137,6 +136,8 @@ export class Game {
     this.hud.setScopeEnabled(s.showScope);
     this.audio.setVolume(s.volume);
     this.audio.spatial = s.spatialAudio;
+    this.scopedSens = s.scopedSens / 100;
+    this.arena.setNight(s.theme === 'night');
     // Every target reads its colour from the palette when it spawns; menu-screen bots respawn to show it now.
     if (isHex(s.targetColor) && `#${PALETTE.targetCore.getHexString()}` !== s.targetColor.toLowerCase()) {
       PALETTE.targetCore.set(s.targetColor);
@@ -162,7 +163,7 @@ export class Game {
 
   private look(dx: number, dy: number): void {
     if (this.mode !== 'play' || this.paused) return;
-    const k = OW_YAW_DEG * this.sens * DEG;
+    const k = OW_YAW_DEG * this.sens * (this.scoped ? this.scopedSens : 1) * DEG;
     this.yaw -= dx * k;
     this.pitch -= (this.invertY ? -dy : dy) * k;
     const lim = 89 * DEG;
@@ -310,35 +311,70 @@ export class Game {
 
   private button(b: number, down: boolean): void {
     if (this.mode !== 'play' || this.paused || !this.weapon) return;
+    if (b === 2) {
+      this.setScoped(down && !!this.weapon.scope);
+      return;
+    }
     if (b !== 0 || !down) return;
     if (this.run !== 'running' && this.run !== 'countdown') return;
     // "High precision input": the shot resolves the instant the button goes down, using the aim at
     // that moment, not the aim at the next rendered frame.
     if (this.cooldown <= 0) {
       this.fire();
-      this.cooldown = 1 / this.weapon.rate;
+      this.cooldown = 1 / this.fireMode.rate;
     }
+  }
+
+  /** The mode the weapon is firing in right now: scoped stats while aiming down sights. */
+  get fireMode(): FireMode {
+    const w = this.weapon ?? WEAPONS.pulse;
+    return this.scoped && w.scope ? w.scope : w;
+  }
+
+  setScoped(on: boolean): void {
+    if (this.scoped === on) return;
+    this.scoped = on;
+    this.engine.setZoom(on ? (this.weapon?.scope?.zoom ?? 1) : 1);
+    this.hud.setScoped(on);
   }
 
   fire(): ShotResult {
     const w = this.weapon ?? WEAPONS.pulse;
+    const mode = this.fireMode;
     const o = this.eye(new Vector3());
     const d = this.aimDir(new Vector3());
+    // Spread: a random point in a cone around the crosshair (plus any bloom built by holding fire).
+    const [sx, sy] = spreadOffset(mode.spread + this.bloom);
+    if (sx || sy) {
+      const q = this.engine.camera.quaternion;
+      _spr.set(1, 0, 0).applyQuaternion(q).multiplyScalar(Math.tan(sx * DEG));
+      d.add(_spr);
+      _spr.set(0, 1, 0).applyQuaternion(q).multiplyScalar(Math.tan(sy * DEG));
+      d.add(_spr).normalize();
+    }
+    if (mode.bloom) this.bloom = Math.min(mode.bloom.max, this.bloom + mode.bloom.per);
     const hit = this.castRay(o, d, 250);
     const point = o.clone().addScaledVector(d, Math.min(hit.t, 250));
     const muzzle = Viewmodel.muzzleOffset.clone().applyQuaternion(this.engine.camera.quaternion).add(o);
-    this.fx.tracer(muzzle, point, w.auto ? 0.01 : 0.016);
-    this.vm.kick(w.auto ? 0.45 : 1);
-    this.audio.shot(w.auto);
-    this.heat = Math.min(1.5, this.heat + (w.auto ? 0.12 : 0.5));
+    const light = w.sound === 'pistols' || w.sound === 'pulse';
+    this.fx.tracer(muzzle, point, light ? 0.008 : 0.016);
+    this.vm.kick(light ? 0.35 : 1);
+    this.audio.shot(w.sound);
+    this.heat = Math.min(1.5, this.heat + (light ? 0.08 : 0.5));
 
     let kill = false;
+    let damage = 0;
     if (hit.figure && this.run === 'running' && (this.drill?.damageEnabled() ?? true)) {
       const f = hit.figure;
       const head = hit.part === 'head';
-      kill = f.damage(head ? w.head : w.body);
-      this.fx.sparks(point, head ? PALETTE.targetRim : PALETTE.signal, head ? 12 : 7);
-      this.audio.hit(head);
+      damage = (head ? mode.head : mode.body) * falloffAt(mode, hit.t);
+      kill = f.damage(damage);
+      this.fx.sparks(point, head ? PALETTE.targetRim : PALETTE.signal, head ? 12 : light ? 3 : 7);
+      // At 40 rounds a second, one hit sound per bullet would be a buzz: space them out.
+      if (head || kill || this.time - this.lastHitSound > 0.045) {
+        this.audio.hit(head);
+        this.lastHitSound = this.time;
+      }
       this.hud.hit(head, kill);
       if (kill) {
         this.fx.burst(f.kind === 'orb' ? f.position.clone() : f.aimPoint());
@@ -347,9 +383,9 @@ export class Game {
     } else if (hit.figure) {
       hit.figure.pulse();
     } else if (hit.t < 250) {
-      this.fx.sparks(point, PALETTE.dust, 4, 1.5);
+      this.fx.sparks(point, PALETTE.dust, light ? 2 : 4, 1.5);
     }
-    const res: ShotResult = { figure: hit.figure, part: hit.part, point, kill, at: this.clock };
+    const res: ShotResult = { figure: hit.figure, part: hit.part, point, kill, at: this.clock, damage, mode };
     if (this.run === 'running' && this.drill) {
       this.drill.onShot(res);
       if (kill && hit.figure) this.drill.onKill(hit.figure);
@@ -374,6 +410,8 @@ export class Game {
     this.drill = drill;
     this.onDone = onDone;
     this.weapon = drill.weapon;
+    this.bloom = 0;
+    this.setScoped(false);
     this.resetPlayer(drill.startBearing);
     this.clock = 0;
     this.cooldown = 0;
@@ -398,6 +436,7 @@ export class Game {
 
   /** Leave play mode and go back to the idle scene. */
   exitPlay(): void {
+    this.setScoped(false);
     if (this.drill) this.drill.teardown();
     this.drill = null;
     this.onDone = null;
@@ -498,7 +537,7 @@ export class Game {
         if (w?.auto && this.input.fireHeld) {
           while (this.cooldown <= 0) {
             this.fire();
-            this.cooldown += 1 / w.rate;
+            this.cooldown += 1 / this.fireMode.rate;
           }
         }
         const eye = this.eye(_v);
@@ -527,11 +566,13 @@ export class Game {
     this.audio.listen(cam.position, _fw, _up);
 
     this.heat = Math.max(0, this.heat - dt * 1.6);
+    const bl = this.fireMode.bloom;
+    if (!this.input.fireHeld) this.bloom = Math.max(0, this.bloom - (bl?.recover ?? 10) * dt);
     for (const f of this.figures) f.update(dt, this.time, cam);
     for (const f of [...this.figures]) if (f.removable) this.removeFigure(f);
     this.fx.update(dt);
     this.vm.update(dt, this.player.horizontalSpeed, this.player.onGround, this.player.crouchT, this.heat);
-    this.engine.showViewmodel = this.mode === 'play' && !!this.weapon && this.viewmodelOn;
+    this.engine.showViewmodel = this.mode === 'play' && !!this.weapon && this.viewmodelOn && !this.scoped;
     this.arena.update(dt, cam.position);
   }
 

@@ -1,7 +1,8 @@
 import { Vector3 } from 'three';
 import { recordFlick, TrackingTrace, type ClickSample, type FlickRecord } from '../core/analytics';
 import type { LiveCoach, TrackingFacts } from '../core/coach';
-import type { Game } from '../core/game';
+import type { Game, ShotResult } from '../core/game';
+import { falloffAt } from '../core/weapons';
 import { TrackingMeter, type AimSample } from '../core/metrics';
 import { angularRadiusDeg } from '../core/sens';
 import { store } from '../core/store';
@@ -281,3 +282,54 @@ export class TargetSound {
     this.opts.onPing?.(g.audio.directionOf(f.position).az, spawn);
   }
 }
+
+export interface ShootingFacts {
+  shots: number;
+  hits: number;
+  heads: number;
+  accuracy: number;
+  /** Share of hits that were headshots. */
+  headRate: number;
+  /**
+   * Damage dealt ÷ the damage the same number of bullets would deal as body shots.
+   * 1.0 = every bullet hit the body. Headshots push it up (×2 each); misses pull it down.
+   */
+  efficiency: number;
+}
+
+/**
+ * Counts every bullet. The yardstick is "all body shots": headshots beat it, misses fall below it,
+ * so aiming for the head only pays if you hit often enough to cover the extra misses.
+ */
+export class ShotLedger {
+  shots = 0;
+  hits = 0;
+  heads = 0;
+  dealt = 0;
+  potential = 0;
+
+  /** `refDist`: metres to the target you were shooting at (for fall-off); null = no fall-off. */
+  add(s: ShotResult, refDist: number | null): void {
+    this.shots++;
+    if (s.figure) {
+      this.hits++;
+      if (s.part === 'head') this.heads++;
+    }
+    this.dealt += s.damage;
+    this.potential += s.mode.body * (refDist === null ? 1 : falloffAt(s.mode, refDist));
+  }
+
+  facts(): ShootingFacts {
+    return {
+      shots: this.shots,
+      hits: this.hits,
+      heads: this.heads,
+      accuracy: this.shots ? this.hits / this.shots : 0,
+      headRate: this.hits ? this.heads / this.hits : 0,
+      efficiency: this.potential ? this.dealt / this.potential : 0,
+    };
+  }
+}
+
+/** Score from shot efficiency: 1.2 (a mix of hits with some heads) is a perfect 100. */
+export const efficiencyScore = (efficiency: number): number => Math.round(100 * Math.min(1, Math.max(0, efficiency) / 1.2));

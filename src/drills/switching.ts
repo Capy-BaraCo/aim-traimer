@@ -1,8 +1,9 @@
-import { switchingFindings } from '../core/coach';
+import { shootingFindings, switchingFindings } from '../core/coach';
 import { WEAPONS, type ShotResult } from '../core/game';
 import { mean } from '../core/metrics';
 import { bearingXZ } from '../world/arena';
 import type { Figure } from '../world/figure';
+import { efficiencyScore, ShotLedger } from './common';
 import { Drill, ms, pct, type DrillReport } from './drill';
 
 /** Triad — three strafers; kill one, find the next. Measures switch time. */
@@ -13,8 +14,7 @@ export class TriadDrill extends Drill {
   override weapon = WEAPONS.pulse;
   override duration = 30;
   private kills = 0;
-  private shots = 0;
-  private hits = 0;
+  private readonly ledger = new ShotLedger();
   private lastKillAt = -1;
   private lastKilled: Figure | null = null;
   private readonly switches: number[] = [];
@@ -68,7 +68,8 @@ export class TriadDrill extends Drill {
       this.g.hud.setStats([
         { k: 'KILLS', v: String(this.kills) },
         { k: 'SWITCH', v: `${ms(mean(this.switches))} ms` },
-        { k: 'ACCURACY', v: `${pct(this.shots ? this.hits / this.shots : 0)}%` },
+        { k: 'ACCURACY', v: `${pct(this.ledger.facts().accuracy)}%` },
+        { k: 'HEADS', v: `${pct(this.ledger.facts().headRate)}%` },
       ]);
     }
     const t = this.g.crosshairTarget().figure;
@@ -79,10 +80,22 @@ export class TriadDrill extends Drill {
     }
   }
 
+  /** Metres to the enemy nearest your crosshair (the one you were shooting at). */
+  private aimedDistance(): number | null {
+    const aim = this.g.aimAngles();
+    let best: { d: number; ang: number } | null = null;
+    for (const f of this.g.figures) {
+      if (!f.alive) continue;
+      const a = this.g.anglesTo(f.aimPoint());
+      const ang = Math.hypot(a.yaw - aim.yaw, a.pitch - aim.pitch);
+      if (!best || ang < best.ang) best = { d: a.dist, ang };
+    }
+    return best?.d ?? null;
+  }
+
   override onShot(s: ShotResult): void {
-    this.shots++;
+    this.ledger.add(s, s.figure ? this.g.eye().distanceTo(s.point) : this.aimedDistance());
     if (!s.figure) return;
-    this.hits++;
     if (this.pending && s.figure !== this.lastKilled) {
       const t = (s.at - this.lastKillAt) * 1000;
       this.switches.push(t);
@@ -101,19 +114,23 @@ export class TriadDrill extends Drill {
   }
 
   report(): DrillReport {
-    const acc = this.shots ? this.hits / this.shots : 0;
+    const shot = this.ledger.facts();
+    const acc = shot.accuracy;
     const sw = mean(this.switches);
-    const notes = switchingFindings({ switchMs: sw, acc, kills: this.kills }).map((f) => f.title);
+    const notes = [...shootingFindings(shot), ...switchingFindings({ switchMs: sw, acc, kills: this.kills })].map((f) => f.title);
     return {
       id: this.id,
       title: this.title,
       level: this.level,
-      analytics: { switching: { switchMs: sw, acc, kills: this.kills } },
-      score: Math.min(100, Math.round(this.kills * 5 * (0.5 + acc))),
+      analytics: { switching: { switchMs: sw, acc, kills: this.kills }, shooting: shot },
+      // Kills, scaled by how well your bullets landed: heads raise it, misses lower it.
+      score: Math.min(100, Math.round(this.kills * 5 * (0.5 + efficiencyScore(shot.efficiency) / 100))),
       stats: [
         { label: 'Eliminations', value: String(this.kills) },
         { label: 'Avg switch time', value: ms(sw), unit: 'ms' },
         { label: 'Shot accuracy', value: pct(acc), unit: '%' },
+        { label: 'Headshots', value: pct(shot.headRate), unit: '% of hits' },
+        { label: 'Damage vs. all-body-shots', value: pct(shot.efficiency), unit: '%' },
       ],
       notes,
     };

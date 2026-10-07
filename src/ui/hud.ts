@@ -106,6 +106,7 @@ export class Hud {
         <canvas></canvas>
         <div class="hud-scope-legend"><span class="lg-yaw">ΔYAW</span><span class="lg-pitch">ΔPITCH</span><span class="lg-scale">±${SCOPE_RANGE}°</span></div>
       </div>
+      <div class="hud-adsview" aria-hidden="true"></div>
       <svg class="hud-sonar" viewBox="-160 -160 320 320" width="320" height="320" aria-hidden="true"></svg>
       <div class="hud-center"></div>
       <div class="hud-sample"></div>
@@ -207,6 +208,11 @@ export class Hud {
     (this.cueEl.querySelector('.hud-cue-text') as HTMLElement).textContent = text;
     this.cueEl.className = `hud-cue on ${tone}`;
     this.cueTimer = 3.6;
+  }
+
+  /** Aiming down sights: a lens vignette (the crosshair stays). */
+  setScoped(on: boolean): void {
+    this.root.classList.toggle('scoped', on);
   }
 
   clearCue(): void {

@@ -1,3 +1,4 @@
+import type { WeaponId } from './weapons';
 import type { FlickRecord } from './analytics';
 import type { Focus } from './metrics';
 import {
@@ -46,6 +47,12 @@ export interface Settings {
   coachCues: boolean;
   /** Colour of every target (orbs and enemies), as #rrggbb. */
   targetColor: string;
+  /** Sensitivity while scoped, % of hip-fire sensitivity. */
+  scopedSens: number;
+  /** Weapon picked for each drill (drill id → weapon id). */
+  loadout: Record<string, WeaponId>;
+  /** Arena lighting. */
+  theme: Theme;
   /** HRTF 3D audio for headphones; off = plain stereo panning for speakers. */
   spatialAudio: boolean;
   /** Positional sounds when targets appear (Snap, Echo, calibration wide flicks). */
@@ -111,6 +118,8 @@ export interface CommitResult extends RunOutcome {
   totalStars: number;
 }
 
+export type Theme = 'day' | 'night';
+
 export const DEFAULT_TARGET_COLOR = '#ff3d12';
 
 /** A #rrggbb colour (what the colour picker and swatches produce). */
@@ -125,6 +134,9 @@ export const DEFAULT_SETTINGS: Settings = {
   inputScale: 1,
   crosshair: { style: 'cross', color: '#3dffc8', length: 7, thickness: 2, gap: 4, outline: true },
   targetColor: DEFAULT_TARGET_COLOR,
+  scopedSens: 67,
+  loadout: {},
+  theme: 'day',
   volume: 0.6,
   fx: 'full',
   renderScale: 1,
@@ -166,6 +178,8 @@ function normalise(parsed: Partial<Profile>): Profile {
       ...fresh.settings,
       ...parsed.settings,
       crosshair: { ...fresh.settings.crosshair, ...parsed.settings?.crosshair },
+      loadout: { ...parsed.settings?.loadout },
+      theme: parsed.settings?.theme === 'night' ? 'night' : 'day',
       targetColor: isHex(parsed.settings?.targetColor) ? parsed.settings!.targetColor : fresh.settings.targetColor,
       calSections: { ...fresh.settings.calSections, ...parsed.settings?.calSections },
     },

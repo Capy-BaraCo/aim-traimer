@@ -8,6 +8,7 @@ import {
   feedback,
   flickFindings,
   hearingFindings,
+  shootingFindings,
   placementFindings,
   switchingFindings,
   trackingFindings,
@@ -17,7 +18,8 @@ import {
 import { rankFor, streak, unlockedLevel } from '../core/progress';
 import { store, type CommitResult } from '../core/store';
 import type { DrillReport } from '../drills/drill';
-import { DRILL_DEFS, drillDef, levelCount, type DrillDef } from '../drills/registry';
+import { DRILL_DEFS, drillDef, levelCount, makeDrill, weaponFor, type DrillDef } from '../drills/registry';
+import { LOADOUTS, WEAPONS } from '../core/weapons';
 import type { App } from './app';
 import * as C from './charts';
 import { canFilm, openFilm } from './film';
@@ -30,6 +32,7 @@ export function findingsFor(r: DrillReport): Finding[] {
   const out: Finding[] = [];
   if (a?.hearing?.length) out.push(...hearingFindings(summariseEcho(a.hearing)));
   if (a?.flicks?.length) out.push(...flickFindings(summariseFlicks(a.flicks), a.flickContext ?? 'mixed'));
+  if (a?.shooting) out.push(...shootingFindings(a.shooting));
   if (a?.tracking) out.push(...trackingFindings(a.tracking));
   if (a?.placement) out.push(...placementFindings(a.placement));
   if (a?.switching) out.push(...switchingFindings(a.switching));
@@ -75,6 +78,21 @@ const levelFor = (id: string) => unlockedLevel(store.get().progress[id], levelCo
 
 // ------------------------------------------------------------------------------------ briefing
 
+/** Weapon chips for a drill's briefing (nothing for drills with a fixed weapon). */
+function weaponPicker(id: string): string {
+  const allowed = LOADOUTS[id];
+  if (!allowed) return '';
+  const cur = weaponFor(id);
+  const w = WEAPONS[cur!];
+  return `<div class="wpn">
+    <span class="kicker plain">Weapon</span>
+    <div class="wpn-row" role="group" aria-label="Choose a weapon">${allowed
+      .map((k) => `<button class="wpn-chip ${k === cur ? 'on' : ''}" data-act="weapon" data-w="${k}" aria-pressed="${k === cur}"><b>${esc(WEAPONS[k].name)}</b><span>${esc(WEAPONS[k].hero)}</span></button>`)
+      .join('')}</div>
+    <p class="wpn-desc">${esc(w.blurb)}${w.scope ? ' <span class="kbd">RMB</span> scope.' : ''}</p>
+  </div>`;
+}
+
 export function openBriefing(app: App, id: DrillId, level?: number): void {
   const def = drillDef(id);
   if (!def) return;
@@ -110,6 +128,7 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
         </div>
       </div>
       <div class="lvl-row" style="--n:${max}" role="group" aria-label="Choose a level">${chips}</div>
+      ${weaponPicker(def.id)}
       <p class="lvl-desc"><span class="tag">Level ${sel}</span> ${esc(def.levels[sel - 1])}${sel < max && sel === unlocked ? ` — earn ★ to unlock level ${sel + 1}` : ''}</p>
       <div class="brief-cols">
         <section><h5>Your job</h5><ol>${def.job.map((j) => `<li>${esc(j)}</li>`).join('')}</ol></section>
@@ -130,6 +149,10 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
       render();
     },
     start: () => startDrill(app, def, sel),
+    weapon: (b) => {
+      store.update((p) => (p.settings.loadout[def.id] = b.dataset.w as keyof typeof WEAPONS));
+      render();
+    },
     chapter: () => {
       app.closeOverlay();
       app.go('manual', def.chapter);
@@ -146,7 +169,7 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
 
 export function startDrill(app: App, def: DrillDef, level: number): void {
   app.play(
-    () => def.make(app.game, level),
+    () => makeDrill(def, app.game, level),
     (r) => {
       app.endPlay();
       const commit = store.commitRun(def.id, level, r.score, def.stars, def.levels.length, extrasFrom(r));
@@ -297,7 +320,7 @@ export function runDaily(app: App): void {
   const plan = DAILY.map((id) => ({ def: drillDef(id)!, level: levelFor(id) }));
   const results: DailyResult[] = [];
   const make = (i: number) => () => {
-    const d = plan[i].def.make(app.game, plan[i].level);
+    const d = makeDrill(plan[i].def, app.game, plan[i].level);
     d.kicker = `DAILY ${i + 1}/${plan.length} · ${d.kicker}`;
     return d;
   };

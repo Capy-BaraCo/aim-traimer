@@ -53,6 +53,17 @@ export interface Fin {
   box: Box;
 }
 
+/** Night palette: cool and dark, so the warm target colours pop. */
+const NIGHT = {
+  horizon: new Color('#1d2640'),
+  zenith: new Color('#04060e'),
+  ground: new Color('#111725'),
+  fog: new Color('#151c2e'),
+  moon: new Color('#b9c8ff'),
+  sky: new Color('#5a6aa0'),
+  groundLight: new Color('#1b1f2b'),
+};
+
 export class Arena {
   readonly root = new Group();
   readonly colliders: Box[] = [];
@@ -62,8 +73,13 @@ export class Arena {
   private readonly groundUniforms = { uCam: { value: new Vector3() } };
   private readonly timeUniform = { value: 0 };
   readonly sun: DirectionalLight;
+  private readonly hemi: HemisphereLight;
+  private readonly scene: Scene;
+  private readonly skyU = { uNight: { value: 0 } };
+  private night = false;
 
   constructor(scene: Scene) {
+    this.scene = scene;
     scene.add(this.root);
     scene.fog = new FogExp2(PALETTE.fog.getHex(), 0.0062);
     scene.background = PALETTE.horizon.clone();
@@ -73,6 +89,7 @@ export class Arena {
     this.root.add(this.buildGround());
 
     const hemi = new HemisphereLight(PALETTE.zenith.clone().lerp(new Color('#ffffff'), 0.62), PALETTE.bone, 1.7);
+    this.hemi = hemi;
     this.root.add(hemi);
 
     this.sun = new DirectionalLight(PALETTE.sun, 2.9);
@@ -98,6 +115,29 @@ export class Arena {
     this.buildDust();
   }
 
+  /**
+   * Night: a deep blue sky with stars and a moon where the sun was, dark cool fog, and dim
+   * moonlight. Targets keep their glow and outline, so they read clearly against the dark.
+   */
+  setNight(on: boolean): void {
+    if (on === this.night) return;
+    this.night = on;
+    const u = (this.sky.material as ShaderMaterial).uniforms;
+    this.skyU.uNight.value = on ? 1 : 0;
+    u.uHorizon.value = on ? NIGHT.horizon : PALETTE.horizon;
+    u.uZenith.value = on ? NIGHT.zenith : PALETTE.zenith;
+    u.uGround.value = on ? NIGHT.ground : PALETTE.groundHaze;
+    u.uSun.value = on ? NIGHT.moon : PALETTE.sun;
+    const fog = this.scene.fog as FogExp2;
+    fog.color.copy(on ? NIGHT.fog : PALETTE.fog);
+    this.scene.background = (on ? NIGHT.horizon : PALETTE.horizon).clone();
+    this.hemi.color.copy(on ? NIGHT.sky : PALETTE.zenith.clone().lerp(new Color('#ffffff'), 0.62));
+    this.hemi.groundColor.copy(on ? NIGHT.groundLight : PALETTE.bone);
+    this.hemi.intensity = on ? 0.9 : 1.7;
+    this.sun.color.copy(on ? NIGHT.moon : PALETTE.sun);
+    this.sun.intensity = on ? 1.35 : 2.9;
+  }
+
   update(dt: number, camPos: Vector3): void {
     this.timeUniform.value += dt;
     this.sky.position.copy(camPos);
@@ -119,6 +159,7 @@ export class Arena {
         uSun: { value: PALETTE.sun },
         uSunDir: { value: SUN_DIR },
         uTime: this.timeUniform,
+        uNight: this.skyU.uNight,
       },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
@@ -135,6 +176,7 @@ export class Arena {
         uniform vec3 uSun;
         uniform vec3 uSunDir;
         uniform float uTime;
+        uniform float uNight;
         varying vec3 vDir;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main() {
@@ -143,7 +185,16 @@ export class Arena {
           vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.6));
           col = mix(col, uGround, smoothstep(0.0, -0.06, h));
           float sd = max(dot(d, uSunDir), 0.0);
-          col += uSun * (pow(sd, 1400.0) * 6.0 + pow(sd, 60.0) * 0.45 + pow(sd, 6.0) * 0.12);
+          if (uNight > 0.5) {
+            // Moon: a crisp disc with a soft halo. Stars: sparse, twinkling, fading near the horizon.
+            col += uSun * (smoothstep(0.99955, 0.9997, sd) * 1.6 + pow(sd, 90.0) * 0.25 + pow(sd, 8.0) * 0.05);
+            vec3 cell = floor(d * 260.0);
+            float star = hash(cell.xy + cell.z * 17.0);
+            float tw = 0.6 + 0.4 * sin(uTime * 2.0 + star * 60.0);
+            col += vec3(0.85, 0.9, 1.0) * step(0.9965, star) * tw * smoothstep(0.05, 0.3, h) * 0.9;
+          } else {
+            col += uSun * (pow(sd, 1400.0) * 6.0 + pow(sd, 60.0) * 0.45 + pow(sd, 6.0) * 0.12);
+          }
           // A slow hairline "scan" band drifting up the sky: the instrument is on.
           float scan = smoothstep(0.004, 0.0, abs(fract(h * 3.0 - uTime * 0.01) - 0.5) - 0.497);
           col = mix(col, col * 1.04, scan * smoothstep(0.02, 0.2, h));

@@ -7,6 +7,8 @@
  * frame, so a sound behind you stays behind you while you turn.
  */
 
+import type { ShotSound } from './weapons';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -103,9 +105,33 @@ export class Audio {
     src.stop(t + dur + 0.02);
   }
 
-  shot(auto: boolean): void {
-    this.burst(auto ? 0.07 : 0.12, auto ? 2400 : 1600, 0.9, auto ? 0.16 : 0.24);
-    this.tone(auto ? 180 : 120, auto ? 0.05 : 0.09, 'sine', auto ? 0.12 : 0.2, 0, 60);
+  /**
+   * One sound per real bullet, so what you hear is the actual fire rate. Kept short and soft:
+   * at 9–40 shots a second anything louder turns into noise.
+   */
+  shot(kind: ShotSound): void {
+    switch (kind) {
+      case 'pulse':
+        this.burst(0.05, 2100, 1.1, 0.07);
+        this.tone(150, 0.045, 'sine', 0.06, 0, 80);
+        break;
+      case 'pistols':
+        this.burst(0.022, 3600, 1.4, 0.03);
+        break;
+      case 'revolver':
+        this.burst(0.18, 900, 0.7, 0.16);
+        this.tone(95, 0.22, 'sine', 0.2, 0, 42);
+        this.burst(0.35, 420, 0.5, 0.04);
+        break;
+      case 'rifle':
+        this.burst(0.09, 2600, 0.9, 0.12);
+        this.tone(170, 0.1, 'triangle', 0.1, 0, 70);
+        break;
+      default:
+        // Training rail: a soft, quick "tk".
+        this.tone(980, 0.035, 'sine', 0.05, 0, 620);
+        this.burst(0.03, 3000, 1.2, 0.03);
+    }
   }
 
   hit(head: boolean): void {

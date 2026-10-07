@@ -38,11 +38,13 @@ App.register('settings', (app) => {
         ${row('Mouse DPI', 'What your mouse software is set to.', `<input class="input" type="number" step="50" min="100" max="32000" data-set="dpi" value="${s.dpi}">`)}
         ${row('Raw input', 'Asks the browser for unaccelerated counts (Chromium). Overwatch always uses raw input.', sw('rawInput', s.rawInput))}
         ${row('Invert vertical look', '', sw('invertY', s.invertY))}
+        ${row('Scoped sensitivity', 'Viper (Ashe) when scoped, as % of your normal sensitivity. 67% feels about the same per screen-distance at its 1.5× zoom. Overwatch has its own "relative aim sensitivity while zoomed" — match it here.', range('scopedSens', 20, 150, 1, s.scopedSens, (v) => `${v}%`))}
         ${row('Browser input scale', 'Leave at 1.00 unless the Protractor shows your 360 is off by a constant factor.', range('inputScale', 0.5, 2, 0.01, s.inputScale, (v) => v.toFixed(2)))}
       </section>
       <section class="panel glass span-5 push-1 rise">
         <h4><span>View</span><span>${verticalFovFromOw(s.fov).toFixed(1)}° vertical</span></h4>
         ${row('Field of view', 'Overwatch horizontal FOV at 16:9. Most players use 103.', range('fov', 80, 103, 1, s.fov))}
+        ${row('Time of day', 'Night is darker and calmer on the eyes; targets keep their glow and outline.', seg('theme', [['day', 'Day'], ['night', 'Night']], s.theme))}
         ${row('Weapon model', '', sw('viewmodel', s.viewmodel))}
         ${row('Aim oscilloscope', 'Live error trace, bottom-right.', sw('showScope', s.showScope))}
         ${row('Coach cues', 'Short tips during drills when the coach spots a pattern.', sw('coachCues', s.coachCues))}
@@ -120,7 +122,7 @@ App.register('settings', (app) => {
     if (t.type === 'range') {
       syncRange(t);
       const lbl = t.nextElementSibling;
-      if (lbl) lbl.textContent = key === 'renderScale' || key === 'volume' ? `${Math.round(v * 100)}%` : key === 'inputScale' ? v.toFixed(2) : String(v);
+      if (lbl) lbl.textContent = key === 'renderScale' || key === 'volume' ? `${Math.round(v * 100)}%` : key === 'inputScale' ? v.toFixed(2) : key === 'scopedSens' ? `${v}%` : String(v);
     }
     if ((key === 'sens' && v > 0) || (key === 'dpi' && v >= 50) || (key !== 'sens' && key !== 'dpi')) apply(key, v);
     const prev = el.querySelector('.xhair-preview');

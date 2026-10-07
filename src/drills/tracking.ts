@@ -1,9 +1,9 @@
-import { trackingFindings } from '../core/coach';
+import { shootingFindings, trackingFindings } from '../core/coach';
 import { WEAPONS, type ShotResult } from '../core/game';
 import { bearingXZ } from '../world/arena';
 import type { BotStyle, StyleTuning } from '../world/brain';
 import type { Figure } from '../world/figure';
-import { TrackingProbe } from './common';
+import { efficiencyScore, ShotLedger, TrackingProbe } from './common';
 import { Drill, pct, type DrillReport } from './drill';
 
 export interface DuelParams {
@@ -24,9 +24,7 @@ export class DuelistDrill extends Drill {
   protected readonly probe: TrackingProbe;
   protected target: Figure | null = null;
   protected kills = 0;
-  protected shots = 0;
-  protected hits = 0;
-  protected heads = 0;
+  protected readonly ledger = new ShotLedger();
   private respawnIn = -1;
   private hudT = 0;
 
@@ -63,21 +61,24 @@ export class DuelistDrill extends Drill {
   }
 
   protected pushHud(): void {
-    const m = this.probe.meter;
+    const f = this.ledger.facts();
     this.g.hud.setStats([
-      { k: 'ON TARGET', v: `${pct(m.accuracy)}%` },
-      { k: 'ERR', v: `${m.meanError.toFixed(2)}°` },
-      { k: 'LAG', v: `${m.trail >= 0 ? '+' : ''}${m.trail.toFixed(2)}°` },
+      { k: 'SCORE', v: String(efficiencyScore(f.efficiency)) },
+      { k: 'ACCURACY', v: `${pct(f.accuracy)}%` },
+      { k: 'HEADS', v: `${pct(f.headRate)}%` },
       { k: 'KILLS', v: String(this.kills) },
     ]);
   }
 
+  /** Whether this bullet counts towards the score (Crossfire: only while moving). */
+  protected counts(): boolean {
+    return true;
+  }
+
   override onShot(s: ShotResult): void {
-    this.shots++;
-    if (s.figure) {
-      this.hits++;
-      if (s.part === 'head') this.heads++;
-    }
+    if (!this.counts()) return;
+    const t = this.target?.alive ? this.target : null;
+    this.ledger.add(s, t ? this.g.eye().distanceTo(t.aimPoint()) : null);
   }
 
   override onKill(): void {
@@ -89,13 +90,17 @@ export class DuelistDrill extends Drill {
   report(): DrillReport {
     const m = this.probe.meter;
     const facts = this.probe.facts();
+    const shot = this.ledger.facts();
     const d = facts.summary.delayMs;
     return {
       id: this.id,
       title: this.title,
       level: this.level,
-      score: Math.round(m.accuracy * 100),
+      score: efficiencyScore(shot.efficiency),
       stats: [
+        { label: 'Damage vs. all-body-shots', value: pct(shot.efficiency), unit: '%', hint: '100% = every bullet hit the body. Headshots add, misses subtract.' },
+        { label: 'Shot accuracy', value: pct(shot.accuracy), unit: '%' },
+        { label: 'Headshots', value: pct(shot.headRate), unit: '% of hits' },
         { label: 'Time on target', value: pct(m.accuracy), unit: '%', hint: 'While holding fire' },
         { label: 'Reaction to strafes', value: d === null ? '—' : String(Math.round(d)), unit: 'ms' },
         { label: 'Behind (+) / ahead (−)', value: m.trail.toFixed(2), unit: '°' },
@@ -103,8 +108,8 @@ export class DuelistDrill extends Drill {
         { label: 'Extra shakes / second', value: facts.summary.jitter.toFixed(1) },
         { label: 'Eliminations', value: String(this.kills) },
       ],
-      notes: trackingFindings(facts).map((f) => f.title),
-      analytics: { tracking: facts },
+      notes: [...shootingFindings(shot), ...trackingFindings(facts)].map((f) => f.title),
+      analytics: { tracking: facts, shooting: shot },
     };
   }
 }
@@ -135,6 +140,10 @@ export class CrossfireDrill extends DuelistDrill {
     super.update(dt);
   }
 
+  protected override counts(): boolean {
+    return this.moving;
+  }
+
   override onShot(s: ShotResult): void {
     super.onShot(s);
     if (!this.moving) {
@@ -148,11 +157,11 @@ export class CrossfireDrill extends DuelistDrill {
   }
 
   protected override pushHud(): void {
-    const m = this.probe.meter;
+    const f = this.ledger.facts();
     this.g.hud.setStats([
-      { k: 'ON TARGET', v: `${pct(m.accuracy)}%` },
+      { k: 'ACCURACY', v: `${pct(f.accuracy)}%` },
+      { k: 'HEADS', v: `${pct(f.headRate)}%` },
       { k: 'MOVING', v: `${pct(this.elapsed > 0 ? this.movingTime / this.elapsed : 0)}%`, tone: this.moving ? 'good' : 'bad' },
-      { k: 'LAG', v: `${m.trail >= 0 ? '+' : ''}${m.trail.toFixed(2)}°` },
       { k: 'KILLS', v: String(this.kills) },
     ]);
   }
@@ -160,7 +169,8 @@ export class CrossfireDrill extends DuelistDrill {
   override report(): DrillReport {
     const r = super.report();
     const moving = this.elapsed > 0 ? this.movingTime / this.elapsed : 0;
-    r.score = Math.round(this.probe.meter.accuracy * moving * 100);
+    // Shots fired while moving, scored like Duelist, then scaled by how much you kept moving.
+    r.score = Math.round(efficiencyScore(this.ledger.facts().efficiency) * moving);
     r.stats.splice(1, 0, { label: 'Time moving', value: pct(moving), unit: '%' });
     r.stats.push({ label: 'Shots while standing still', value: String(this.stillShots) });
     r.analytics = { ...r.analytics, movement: { moving } };

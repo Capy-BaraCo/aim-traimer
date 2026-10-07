@@ -1,6 +1,8 @@
 import { cmPer360, degPerCm, edpi, inchesPer360, STYLE_BANDS, styleFor } from '../../core/sens';
 import { rankFor, streak, totalStars } from '../../core/progress';
 import { store } from '../../core/store';
+import { DRILL_DEFS } from '../../drills/registry';
+import { CHAPTERS } from '../../guide/chapters';
 import { App } from '../app';
 import { actions, h } from '../dom';
 
@@ -46,7 +48,7 @@ App.register('home', (app) => {
           <div><b>7</b>blind rounds</div>
           <div><b>±50%</b>opening window</div>
           <div><b>1/128</b>final precision</div>
-          <div><b>7 × 10</b>drill levels</div>
+          <div><b>${DRILL_DEFS.reduce((n, d) => n + d.levels.length, 0)}</b>drill levels</div>
         </div>
         <div class="ticker rise">
           <span>0.0066° / COUNT / SENS</span>
@@ -58,8 +60,8 @@ App.register('home', (app) => {
 
       <section class="instruments">
         <button class="inst rise" data-act="cal"><span class="n">01</span><span><h3>Calibrate</h3><p>Find your sensitivity · blind α/β tests · tracking, short &amp; wide flicks</p></span><span class="go">→</span></button>
-        <button class="inst rise" data-act="training"><span class="n">02</span><span><h3>Training</h3><p>7 drills × 10 levels · stars &amp; ranks · daily warm-up</p></span><span class="go">→</span></button>
-        <button class="inst rise" data-act="manual"><span class="n">03</span><span><h3>Field manual</h3><p>Aim explained simply · 11 chapters · a drill in each</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="training"><span class="n">02</span><span><h3>Training</h3><p>${DRILL_DEFS.length} drills · ${Math.max(...DRILL_DEFS.map((d) => d.levels.length))} levels max · 5 weapons · daily warm-up</p></span><span class="go">→</span></button>
+        <button class="inst rise" data-act="manual"><span class="n">03</span><span><h3>Field manual</h3><p>Aim explained simply · ${CHAPTERS.length} chapters · a drill in each</p></span><span class="go">→</span></button>
         <button class="inst rise" data-act="logbook"><span class="n">04</span><span><h3>Logbook</h3><p>Where your flicks land · reaction · aim fingerprint</p></span><span class="go">→</span></button>
         <div class="readout glass rise">
           ${swipeDial(degPerCm(s.sens, s.dpi) * 10)}

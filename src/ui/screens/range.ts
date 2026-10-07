@@ -18,7 +18,8 @@ App.register('range', (app) => {
           <tr><td>Move · jump · crouch</td><td>WASD · SPACE · C / SHIFT</td></tr>
           <tr><td>Fire</td><td>LEFT MOUSE</td></tr>
           <tr><td>Sensitivity −0.05 / +0.05</td><td>[ · ]</td></tr>
-          <tr><td>Pulse (auto) / Rail (semi)</td><td>1 · 2</td></tr>
+          <tr><td>Pulse rifle · Rail · Pulse pistols · Peacekeeper · Viper</td><td>1 – 5</td></tr>
+          <tr><td>Scope (Viper)</td><td>Right mouse</td></tr>
           <tr><td>Respawn figures</td><td>R</td></tr>
           <tr><td>Pause / leave</td><td>ESC</td></tr>
         </tbody></table>

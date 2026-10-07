@@ -1,5 +1,7 @@
 import type { DrillId } from '../core/coach';
 import type { Game } from '../core/game';
+import { store } from '../core/store';
+import { LOADOUTS, WEAPONS, type WeaponId } from '../core/weapons';
 import { MAX_LEVEL, type Thresholds } from '../core/progress';
 import type { StyleTuning } from '../world/brain';
 import type { Drill } from './drill';
@@ -174,11 +176,11 @@ export const DRILL_DEFS: DrillDef[] = [
     chapter: 'tracking',
     oneLiner: 'An enemy dodges left and right. Keep your crosshair on them while holding the trigger.',
     job: [
-      'Hold the left mouse button the whole time.',
-      'Keep your crosshair on their chest and follow them as they dodge.',
+      'Hold the left mouse button (Peacekeeper and Viper: click each shot).',
+      'Keep your crosshair on them as they dodge — the chest is safe; move up to the head once you hit most shots.',
       'When they jump or crouch, stay with them.',
     ],
-    scoring: 'Your score is the percentage of time your crosshair was on them while you were firing.',
+    scoring: 'Every bullet counts. A body hit is worth 1, a headshot 2, a miss 0 — so aim for the head only if you can still hit most of your shots.',
     measures: ['Time on target', 'How many milliseconds behind their dodges you react', 'Whether your crosshair sits low or high', 'How shaky your aim is'],
     tips: ['Relax your grip — tense hands make jerky aim.', 'Watch their body, not your crosshair.'],
     stars: [35, 50, 65],
@@ -263,8 +265,8 @@ export const DRILL_DEFS: DrillDef[] = [
     kicker: 'TARGET SWITCHING',
     chapter: 'switching',
     oneLiner: 'Several enemies at once. Take one down, move straight to the next.',
-    job: ['Hold fire on one enemy until it drops.', 'Move to the closest next enemy right away.', 'Repeat as fast as you can.'],
-    scoring: 'Your score is eliminations, boosted by accuracy.',
+    job: ['Shoot one enemy until it drops.', 'Move to the closest next enemy right away.', 'Repeat as fast as you can.'],
+    scoring: 'Eliminations, boosted by how well your bullets land: headshots raise it, misses lower it.',
     measures: ['Time between a kill and your next hit', 'Accuracy while switching'],
     tips: ['Look for the next target while the current one is dying.', 'Closest first, unless someone is almost dead.'],
     stars: [40, 55, 70],
@@ -301,7 +303,7 @@ export const DRILL_DEFS: DrillDef[] = [
     chapter: 'movement',
     oneLiner: 'The same duel as Duelist, with one rule: your shots only count while you are moving.',
     job: ['Hold A or D to strafe while shooting, and keep changing direction.', 'Keep your crosshair on the enemy while your body moves.', 'Standing still = no damage.'],
-    scoring: 'Your score is time on target multiplied by time spent moving.',
+    scoring: 'Scored like Duelist (body hit 1, headshot 2, miss 0) using only shots fired while moving, then multiplied by time spent moving.',
     measures: ['Time on target', 'Time spent moving', 'Reaction to their dodges'],
     tips: ['Your hand cancels out your own movement — that is the skill.', 'Uneven rhythms are harder to hit than steady ones.'],
     stars: [30, 45, 60],
@@ -314,3 +316,19 @@ export const drillDef = (id: string): DrillDef | undefined => DRILL_DEFS.find((d
 
 /** How many levels a drill has (most have MAX_LEVEL). */
 export const levelCount = (id: string): number => drillDef(id)?.levels.length ?? MAX_LEVEL;
+
+/** The weapon you picked for a drill (or its default), if the drill lets you choose. */
+export function weaponFor(id: string): WeaponId | null {
+  const allowed = LOADOUTS[id];
+  if (!allowed) return null;
+  const pick = store.settings.loadout[id];
+  return pick && allowed.includes(pick) ? pick : allowed[0];
+}
+
+/** Build a drill at a level, armed with the weapon you picked for it. */
+export function makeDrill(def: DrillDef, g: Game, level: number): Drill {
+  const d = def.make(g, level);
+  const w = weaponFor(def.id);
+  if (w) d.weapon = WEAPONS[w];
+  return d;
+}
