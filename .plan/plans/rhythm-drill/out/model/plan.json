@@ -6,7 +6,7 @@
     "recipe": "next-feature",
     "createdAt": "2026-10-06T06:13:29.161Z"
   },
-  "seq": 354,
+  "seq": 364,
   "elements": [
     {
       "id": "el_81fo6wc1",
@@ -1669,7 +1669,7 @@
           "tests/rhythm-generator.test.ts"
         ],
         "size": "L",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1742,7 +1742,7 @@
           "src/core/audio.ts"
         ],
         "size": "M",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1844,7 +1844,7 @@
           "src/ui/session.ts"
         ],
         "size": "L",
-        "status": "todo"
+        "status": "done"
       }
     },
     {
@@ -1864,7 +1864,7 @@
         ],
         "milestone": "3 · Play",
         "touches": [
-          "src/drills/overdrive-targets.ts",
+          "src/drills/overdrive-tap.ts",
           "src/world/figure.ts"
         ],
         "size": "M",
@@ -1888,7 +1888,7 @@
         ],
         "milestone": "3 · Play",
         "touches": [
-          "src/drills/overdrive-targets.ts",
+          "src/drills/overdrive-movers.ts",
           "src/world/brain.ts"
         ],
         "size": "L",
@@ -1912,7 +1912,7 @@
         ],
         "milestone": "3 · Play",
         "touches": [
-          "src/drills/overdrive-targets.ts",
+          "src/drills/overdrive-cues.ts",
           "src/ui/hud.ts",
           "src/styles/v2.css"
         ],

@@ -1,6 +1,6 @@
 {
   "plan": "rhythm-drill",
-  "seq": 354,
+  "seq": 364,
   "todos": [
     {
       "ref": "T1",
@@ -349,7 +349,7 @@
       "model": "opus",
       "modelWhy": "Many interacting constraints (density, spacing, caps, low-confidence fallback).",
       "size": "L",
-      "status": "todo",
+      "status": "done",
       "milestone": "1 \u00b7 Chart logic (pure)",
       "dependsOn": [
         "T4",
@@ -390,7 +390,7 @@
       "model": "sonnet",
       "modelWhy": "Vite module worker + cache wiring.",
       "size": "M",
-      "status": "todo",
+      "status": "done",
       "milestone": "2 \u00b7 Songs & audio",
       "dependsOn": [
         "T3",
@@ -426,7 +426,7 @@
       "model": "opus",
       "modelWhy": "Integration core: DrillDef.make ctx, ShotResult.press, song-time judging.",
       "size": "L",
-      "status": "todo",
+      "status": "done",
       "milestone": "3 \u00b7 Play",
       "dependsOn": [
         "T6",
@@ -482,7 +482,7 @@
         "D14"
       ],
       "touches": [
-        "src/drills/overdrive-targets.ts",
+        "src/drills/overdrive-tap.ts",
         "src/world/figure.ts"
       ],
       "description": "src/drills/overdrive-targets.ts. Per D14: circle = normal on-screen flick, diamond = small precision target with a bigger Perfect bonus, triangle = off-screen wide flick that points the way to turn, with a positional ping (TargetSound). Bursts: 3\u20135 small orbs on consecutive eighth notes along a line or arc. Decoys: a friendly-coloured figure; hitting one breaks the combo. Hitboxes match the visible shapes.",
@@ -515,7 +515,7 @@
         "D13"
       ],
       "touches": [
-        "src/drills/overdrive-targets.ts",
+        "src/drills/overdrive-movers.ts",
         "src/world/brain.ts"
       ],
       "description": "BeatStrafeBrain (implements Brain in src/world/brain.ts) takes a songTime getter and the chart's beat times when built, and flips direction on beats; Brain.update(dt, player) keeps its signature. Holds are orbs following a spline whose progress is a function of songTime only. Peekers use a PeekBrain variant that shows on the target beat and hides on the next beat behind their chart wall (a collider from T12).",
@@ -551,7 +551,7 @@
         "R3"
       ],
       "touches": [
-        "src/drills/overdrive-targets.ts",
+        "src/drills/overdrive-cues.ts",
         "src/ui/hud.ts",
         "src/styles/v2.css"
       ],

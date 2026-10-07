@@ -59,17 +59,17 @@
   - [x] Mixed's landGrid and slotGrid per section kind and fills match D18 (test).
 
 ### T6 · Generate seeded charts from analysis, preset and level
-- 1 · Chart logic (pure) · L · todo
+- 1 · Chart logic (pure) · L · done
 - Depends on: T4, T5
 - Implements: G1, G3
 - Touches: src/rhythm/generator.ts, tests/rhythm-generator.test.ts
 - Context: src/rhythm/generator.ts: generate(analysis, structure, preset, level, songId) → Chart. PRNG (e.g. mulberry32) seeded by hash(songId, preset id, level). Fun first (D19): the plan below is the starting point, and the generator should make charts that feel musical and varied, with creative licence to go further (repeated motifs within a section, call-and-response between left and right, rests in quiet moments, accents on the strongest onsets, syncopation in peaks, fills and flourishes at climactic moments, surprises at drops), so no two bars feel mechanical. Starting point: for each bar, take the section row, draw a count from perBar (ramped across build sections) × level density, choose slots on the row's slotGrid feel (beats, plus off-beat eighths in peaks, D18) weighted by onset strength (burst orbs on eighths), and sample each type from the row weights and each flick's shape from the shape split. Times: targetTime = the slot; landTime = targetTime − leadBeats, snapped to the row's landGrid feel (never below 1 beat) and measured along the beat grid; launchTime = landTime − 1 beat; windowEnd = targetTime + afterBeats. Fills (D18, when preset.fills): at least a run into every peak (e.g. 3–5 burst orbs on eighths into the peak's first downbeat, where a target lands), with more flourishes where the music builds. Positions: on-screen spread within about ±35° bearing and −10..+15° pitch at 10–18 m for most types; triangles 60–150° left or right; peekers get a Wall in chart.walls; movement patterns across the screen are part of the fun. Keep it readable: cap concurrent targets at maxConcurrent and never overlap strafers or holds with each other. When analysis.confidence < 0.4 (R2), slots come from detected onset peaks instead of the beat grid. The chart ends at the song's end (D12). Report every creative choice you made beyond this starting point.
 - Done when:
-  - [ ] The same inputs give a deep-equal chart; a different songId gives a different one.
-  - [ ] Over a 200-bar synthetic song, each section kind's type mix follows the preset matrix in spirit (within ±10%, fills and flourishes excluded).
-  - [ ] Every target lands on something audible: for confident analyses every targetTime and burst orb is on the beat grid or its eighths within 1 ms; for low-confidence analyses on an onset peak.
-  - [ ] Every peak that follows another section gets a fill or flourish leading into it.
-  - [ ] Readable: concurrent targets never exceed maxConcurrent, and no two strafer/hold targets overlap in time.
+  - [x] The same inputs give a deep-equal chart; a different songId gives a different one.
+  - [x] Over a 200-bar synthetic song, each section kind's type mix follows the preset matrix in spirit (within ±10%, fills and flourishes excluded).
+  - [x] Every target lands on something audible: for confident analyses every targetTime and burst orb is on the beat grid or its eighths within 1 ms; for low-confidence analyses on an onset peak.
+  - [x] Every peak that follows another section gets a fill or flourish leading into it.
+  - [x] Readable: concurrent targets never exceed maxConcurrent, and no two strafer/hold targets overlap in time.
 
 ### T7 · Judge hits, track the combo and compute the 0–100 score
 - 1 · Chart logic (pure) · M · done
@@ -99,16 +99,16 @@
   - [x] A quota error shows: "Your browser is out of space for songs. Delete one and try again."
 
 ### T9 · Decode and analyse songs off the main thread
-- 2 · Songs & audio · M · todo
+- 2 · Songs & audio · M · done
 - Depends on: T3, T4, T8
 - Implements: G1
 - Touches: src/rhythm/worker.ts, src/core/songs.ts, src/core/audio.ts
 - Context: Decode with AudioContext.decodeAudioData on the main thread, downmix to mono and transfer the samples to src/rhythm/worker.ts (a Vite module worker: new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })). The worker runs analyse() then structure() and posts progress. Cache {analysis, structure} in the song library under the song id, but on load always recompute the Structure from the cached Analysis with structure() (about 20 ms), so sections retuned later (T19) apply to songs already in the library. If the cached analysis.version differs from ANALYSIS_VERSION, re-analyse.
 - Done when:
-  - [ ] A 4-minute MP3 is ready to play within 5 s of being added on a mid-range laptop.
-  - [ ] No main-thread task longer than 100 ms while analysis runs (DevTools Performance).
-  - [ ] A corrupt or unsupported file shows a plain-words error.
-  - [ ] Replaying a song uses the cache without starting the worker; bumping ANALYSIS_VERSION forces a re-analysis.
+  - [x] A 4-minute MP3 is ready to play within 5 s of being added on a mid-range laptop.
+  - [x] No main-thread task longer than 100 ms while analysis runs (DevTools Performance).
+  - [x] A corrupt or unsupported file shows a plain-words error.
+  - [x] Replaying a song uses the cache without starting the worker; bumping ANALYSIS_VERSION forces a re-analysis.
 
 ### T10 · Play music on the AudioContext clock
 - 2 · Songs & audio · M · done
@@ -145,23 +145,23 @@
   - [x] Frame rate at FX 'full' is no worse than Duelist on the same machine.
 
 ### T13 · Create the Overdrive drill core
-- 3 · Play · L · todo
+- 3 · Play · L · done
 - Depends on: T6, T7, T10
 - Implements: G3, G4
 - Touches: src/drills/overdrive.ts, src/drills/drill.ts, src/drills/registry.ts, src/core/game.ts, src/ui/session.ts
 - Context: src/drills/overdrive.ts: OverdriveDrill extends Drill (id 'overdrive', movable = false, D13). Launch path: DrillDef.make gains an optional third argument, make(g, level, ctx?), and startDrill forwards it; Overdrive's make requires ctx = {chart, buffer}. duration = chart.duration + 2, and done is set once songTime() passes chart.duration (Game ends runs on the frame clock). begin() starts the music. update() reads audio.songTime() to launch targets, advance them through fly-in → landed → window → expired, and remove expired ones as misses. Judging reads audio.songTime() inside onShot, which runs synchronously in the mousedown handler, so it is the click instant. Firing (D13): the weapon streams while held. Add `press: boolean` to ShotResult (true from Game.button, false from the auto-fire tick). Tap targets (flick, burst, peeker, decoy) only accept press shots; stream shots only damage strafers and holds. Use one FlickRecorder per flick target to fill analytics.flicks.
 - Done when:
-  - [ ] A hand-written chart with one target of each kind plays to the end with music.
-  - [ ] Each target launches within one frame of its chart time and vanishes at windowEnd if not hit.
-  - [ ] Holding fire across a tap target does not hit it; clicking does.
-  - [ ] The report includes score, difficulty, level, mean timing offset and hit rate per type.
-  - [ ] Existing drills still work through make(g, level); `npm run build` and `npm test` pass.
+  - [x] A hand-written chart with one target of each kind plays to the end with music.
+  - [x] Each target launches within one frame of its chart time and vanishes at windowEnd if not hit.
+  - [x] Holding fire across a tap target does not hit it; clicking does.
+  - [x] The report includes score, difficulty, level, mean timing offset and hit rate per type.
+  - [x] Existing drills still work through make(g, level); `npm run build` and `npm test` pass.
 
 ### T14 · Add tap targets: flick shapes, bursts and decoys
 - 3 · Play · M · todo
 - Depends on: T13
 - Implements: G3
-- Touches: src/drills/overdrive-targets.ts, src/world/figure.ts
+- Touches: src/drills/overdrive-tap.ts, src/world/figure.ts
 - Context: src/drills/overdrive-targets.ts. Per D14: circle = normal on-screen flick, diamond = small precision target with a bigger Perfect bonus, triangle = off-screen wide flick that points the way to turn, with a positional ping (TargetSound). Bursts: 3–5 small orbs on consecutive eighth notes along a line or arc. Decoys: a friendly-coloured figure; hitting one breaks the combo. Hitboxes match the visible shapes.
 - Done when:
   - [ ] Circle, diamond and triangle are visually distinct, and each is hit exactly where it is drawn.
@@ -174,7 +174,7 @@ _Shaped by: D19_
 - 3 · Play · L · todo
 - Depends on: T13
 - Implements: G3
-- Touches: src/drills/overdrive-targets.ts, src/world/brain.ts
+- Touches: src/drills/overdrive-movers.ts, src/world/brain.ts
 - Context: BeatStrafeBrain (implements Brain in src/world/brain.ts) takes a songTime getter and the chart's beat times when built, and flips direction on beats; Brain.update(dt, player) keeps its signature. Holds are orbs following a spline whose progress is a function of songTime only. Peekers use a PeekBrain variant that shows on the target beat and hides on the next beat behind their chart wall (a collider from T12).
 - Done when:
   - [ ] Strafer direction changes land within one frame of a beat.
@@ -187,7 +187,7 @@ _Shaped by: D19_
 - 3 · Play · M · todo
 - Depends on: T13
 - Implements: G5
-- Touches: src/drills/overdrive-targets.ts, src/ui/hud.ts, src/styles/v2.css
+- Touches: src/drills/overdrive-cues.ts, src/ui/hud.ts, src/styles/v2.css
 - Context: Per V3: fly-in from the distance during the beat before landing, a closing ring that touches the target on its target beat, a pulse with the music and a flash on the beat, and the beat strip HUD with an icon per target type scrolling to a hit line (hideable via the beatStrip setting). Also a combo counter with multiplier, and the judgement word (Perfect / Early / Late / Miss) by the crosshair.
 - Done when:
   - [ ] Each ring touches its target at targetTime ± one frame.
@@ -233,4 +233,4 @@ _Shaped by: D19_
   - [ ] The tuned values are committed in presets.ts and levels.ts, and `npm test` is green.
 _Shaped by: D19_
 
-_Generated by live-planner from plan "rhythm-drill" at seq 354. Change the plan and recompile; do not edit by hand._
+_Generated by live-planner from plan "rhythm-drill" at seq 364. Change the plan and recompile; do not edit by hand._

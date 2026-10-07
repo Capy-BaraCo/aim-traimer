@@ -1,6 +1,6 @@
 # Overdrive: coding-agent handoff
 
-Generated from plan `rhythm-drill` at seq 354 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
+Generated from plan `rhythm-drill` at seq 364 by `handoff/make_handoff.py`. Regenerate after any plan change; don't edit by hand.
 
 Model pack (source of truth): `.plan/plans/rhythm-drill/out/model/`. Machine-readable copy of this list: `handoff/todos.json`.
 
@@ -59,7 +59,6 @@ files changed, each Done-when item with evidence (test name or how you checked),
 **File clashes inside a wave** (serialise these, or merge with care):
 
 - wave 1: src/core/game.ts (T10, T12)
-- wave 7: src/drills/overdrive-targets.ts (T14, T15, T16)
 - wave 7: src/styles/v2.css (T16, T17)
 - wave 7: src/ui/session.ts (T17, T18)
 
@@ -266,7 +265,7 @@ Done when:
 - wave 7 · Sonnet · size M: Well-specified target shapes on top of T13.
 - Depends on: T13 · Implements: G3
 - Read first: D13, D14
-- Touches: `src/drills/overdrive-targets.ts`, `src/world/figure.ts`
+- Touches: `src/drills/overdrive-tap.ts`, `src/world/figure.ts`
 
 src/drills/overdrive-targets.ts. Per D14: circle = normal on-screen flick, diamond = small precision target with a bigger Perfect bonus, triangle = off-screen wide flick that points the way to turn, with a positional ping (TargetSound). Bursts: 3–5 small orbs on consecutive eighth notes along a line or arc. Decoys: a friendly-coloured figure; hitting one breaks the combo. Hitboxes match the visible shapes.
 
@@ -281,7 +280,7 @@ Done when:
 - wave 7 · Opus · size L: Beat-locked brains and walls; subtle timing.
 - Depends on: T13 · Implements: G3
 - Read first: D1, D13
-- Touches: `src/drills/overdrive-targets.ts`, `src/world/brain.ts`
+- Touches: `src/drills/overdrive-movers.ts`, `src/world/brain.ts`
 
 BeatStrafeBrain (implements Brain in src/world/brain.ts) takes a songTime getter and the chart's beat times when built, and flips direction on beats; Brain.update(dt, player) keeps its signature. Holds are orbs following a spline whose progress is a function of songTime only. Peekers use a PeekBrain variant that shows on the target beat and hides on the next beat behind their chart wall (a collider from T12).
 
@@ -296,7 +295,7 @@ Done when:
 - wave 7 · Sonnet · size M: HUD + cues following V3; human checks readability.
 - Depends on: T13 · Implements: G5 · Mitigates: R3
 - Read first: D5, V3, R3
-- Touches: `src/drills/overdrive-targets.ts`, `src/ui/hud.ts`, `src/styles/v2.css`
+- Touches: `src/drills/overdrive-cues.ts`, `src/ui/hud.ts`, `src/styles/v2.css`
 - 🧑 Human gate: the human checks readability at Expert on a fast song
 
 Per V3: fly-in from the distance during the beat before landing, a closing ring that touches the target on its target beat, a pulse with the music and a flash on the beat, and the beat strip HUD with an icon per target type scrolling to a hit line (hideable via the beatStrip setting). Also a combo counter with multiplier, and the judgement word (Perfect / Early / Late / Miss) by the crosshair.
