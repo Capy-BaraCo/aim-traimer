@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Vector3, type Color } from 'three';
 import type { Drill, DrillReport } from '../drills/drill';
 import { Arena, bearingXZ, PLAY_RADIUS } from '../world/arena';
 import { StrafeBrain, type Brain, type StrafeOptions } from '../world/brain';
@@ -39,6 +39,8 @@ export interface ShotResult {
   kill: boolean;
   /** Seconds on the game clock when the shot was taken. */
   at: number;
+  /** True for a click (fired as the button went down, from Game.button), false for the held stream (auto-fire). */
+  press: boolean;
 }
 
 type RunState = 'idle' | 'countdown' | 'running' | 'done';
@@ -138,6 +140,9 @@ export class Game {
       };
       preview.off = () => this.exitSynthwave();
       (window as unknown as { __synthwave: typeof preview }).__synthwave = preview;
+      // Dev only: `__overdrive(level)` plays the test song, `.test()` a hand-written chart over a click
+      // track, `.off()` quits (src/drills/overdrive-dev.ts). Loaded lazily so it never reaches a build.
+      void import('../drills/overdrive-dev').then((m) => m.exposeOverdriveHook(this));
     }
   }
 
@@ -308,8 +313,8 @@ export class Game {
     return f;
   }
 
-  spawnOrb(p: Vector3, radius: number): Figure {
-    const f = new Figure('orb', this.arena.colliders, PLAY_RADIUS + 60);
+  spawnOrb(p: Vector3, radius: number, color?: Color): Figure {
+    const f = new Figure('orb', this.arena.colliders, PLAY_RADIUS + 60, color);
     f.orbRadius = radius;
     f.hp = f.maxHp = 1;
     f.mover.teleport(p.x, p.y, p.z);
@@ -354,13 +359,14 @@ export class Game {
     if (this.run !== 'running' && this.run !== 'countdown') return;
     // "High precision input": the shot resolves the instant the button goes down, using the aim at
     // that moment, not the aim at the next rendered frame.
-    if (this.cooldown <= 0) {
-      this.fire();
+    if (this.cooldown <= 0 || this.drill?.clickAlwaysFires) {
+      this.fire(true);
       this.cooldown = 1 / this.weapon.rate;
     }
   }
 
-  fire(): ShotResult {
+  /** Fire one shot now. `press` marks a click (true) or a shot of the held stream (false). */
+  fire(press = true): ShotResult {
     const w = this.weapon ?? WEAPONS.pulse;
     const o = this.eye(new Vector3());
     const d = this.aimDir(new Vector3());
@@ -373,7 +379,7 @@ export class Game {
     this.heat = Math.min(1.5, this.heat + (w.auto ? 0.12 : 0.5));
 
     let kill = false;
-    if (hit.figure && this.run === 'running' && (this.drill?.damageEnabled() ?? true)) {
+    if (hit.figure && this.run === 'running' && (this.drill?.damageEnabled(hit.figure, press) ?? true)) {
       const f = hit.figure;
       const head = hit.part === 'head';
       kill = f.damage(head ? w.head : w.body);
@@ -389,7 +395,7 @@ export class Game {
     } else if (hit.t < 250) {
       this.fx.sparks(point, PALETTE.dust, 4, 1.5);
     }
-    const res: ShotResult = { figure: hit.figure, part: hit.part, point, kill, at: this.clock };
+    const res: ShotResult = { figure: hit.figure, part: hit.part, point, kill, at: this.clock, press };
     if (this.run === 'running' && this.drill) {
       this.drill.onShot(res);
       if (kill && hit.figure) this.drill.onKill(hit.figure);
@@ -543,7 +549,7 @@ export class Game {
         const w = this.weapon;
         if (w?.auto && this.input.fireHeld) {
           while (this.cooldown <= 0) {
-            this.fire();
+            this.fire(false);
             this.cooldown += 1 / w.rate;
           }
         }

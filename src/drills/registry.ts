@@ -5,9 +5,16 @@ import type { StyleTuning } from '../world/brain';
 import type { Drill } from './drill';
 import { EchoDrill, type EchoParams } from './echo';
 import { FlickDrill, PinDrill, type FlickParams } from './flick';
+import type { OverdriveContext } from './overdrive';
 import { CornerWatchDrill } from './placement';
 import { TriadDrill } from './switching';
 import { CrossfireDrill, DuelistDrill, type DuelParams } from './tracking';
+
+/**
+ * Extra launch data a drill may need beyond its level. Only Overdrive uses it: the chart, the decoded
+ * song and its beats (T13). Every other drill ignores it.
+ */
+export type DrillContext = OverdriveContext;
 
 export interface DrillDef {
   id: DrillId;
@@ -23,7 +30,7 @@ export interface DrillDef {
   tips: string[];
   stars: Thresholds;
   levels: string[];
-  make: (g: Game, level: number) => Drill;
+  make: (g: Game, level: number, ctx?: DrillContext) => Drill;
 }
 
 const L = (level: number) => Math.min(MAX_LEVEL, Math.max(1, Math.round(level)));

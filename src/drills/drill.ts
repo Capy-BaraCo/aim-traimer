@@ -50,6 +50,11 @@ export abstract class Drill {
   level = 1;
   /** Facing when the drill starts (bearing, degrees). */
   startBearing = 0;
+  /**
+   * Every click fires, even inside an automatic weapon's cooldown. For Overdrive: a click on the beat
+   * must never be swallowed because the held stream fired a moment before.
+   */
+  clickAlwaysFires = false;
   readonly coach: LiveCoach;
 
   constructor(protected readonly g: Game) {
@@ -68,8 +73,11 @@ export abstract class Drill {
   onShot(_shot: ShotResult): void {}
   onKill(_f: Figure): void {}
   onKey(_code: string): void {}
-  /** Return false to make hits register visually but deal no damage (e.g. "only while moving"). */
-  damageEnabled(): boolean {
+  /**
+   * Return false to make hits register visually but deal no damage (e.g. "only while moving").
+   * `press` is true for a click, false for the held stream (see ShotResult.press).
+   */
+  damageEnabled(_figure?: Figure, _press?: boolean): boolean {
     return true;
   }
   abstract report(): DrillReport;

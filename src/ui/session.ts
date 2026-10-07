@@ -17,7 +17,7 @@ import {
 import { MAX_LEVEL, rankFor, streak, unlockedLevel } from '../core/progress';
 import { store, type CommitResult } from '../core/store';
 import type { DrillReport } from '../drills/drill';
-import { DRILL_DEFS, drillDef, type DrillDef } from '../drills/registry';
+import { DRILL_DEFS, drillDef, type DrillContext, type DrillDef } from '../drills/registry';
 import type { App } from './app';
 import * as C from './charts';
 import { canFilm, openFilm } from './film';
@@ -143,13 +143,14 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
   el.focus();
 }
 
-export function startDrill(app: App, def: DrillDef, level: number): void {
+/** Play a drill at a level. `ctx` is the extra launch data some drills need (Overdrive's chart and song). */
+export function startDrill(app: App, def: DrillDef, level: number, ctx?: DrillContext): void {
   app.play(
-    () => def.make(app.game, level),
+    () => def.make(app.game, level, ctx),
     (r) => {
       app.endPlay();
       const commit = store.commitRun(def.id, level, r.score, def.stars, MAX_LEVEL, extrasFrom(r));
-      showDebrief(app, def, level, r, commit);
+      showDebrief(app, def, level, r, commit, ctx);
     },
   );
 }
@@ -208,7 +209,7 @@ function meter(score: number, t: readonly [number, number, number]): string {
   return `<div class="db-meter"><div class="fill" style="width:${Math.min(100, score)}%"></div>${marks}</div>`;
 }
 
-export function showDebrief(app: App, def: DrillDef, level: number, r: DrillReport, c: CommitResult): void {
+export function showDebrief(app: App, def: DrillDef, level: number, r: DrillReport, c: CommitResult, ctx?: DrillContext): void {
   const fb = feedback(findingsFor(r));
   const next = fb.next && fb.next !== def.id ? drillDef(fb.next) : null;
   const unlockedNow = levelFor(def.id);
@@ -266,8 +267,9 @@ export function showDebrief(app: App, def: DrillDef, level: number, r: DrillRepo
       </div>
     </div>`);
   actions(el, {
+    // A context belongs to one level (Overdrive's chart is built for it), so only a retry reuses it.
     nextlvl: () => startDrill(app, def, level + 1),
-    retry: () => startDrill(app, def, level),
+    retry: () => startDrill(app, def, level, ctx),
     back: () => {
       app.closeOverlay();
       app.refresh();
