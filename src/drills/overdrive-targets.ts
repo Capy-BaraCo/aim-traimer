@@ -20,6 +20,7 @@
  */
 import { Color, Vector3 } from 'three';
 import type { Game } from '../core/game';
+import type { TargetRole } from '../rhythm/generator';
 import type { LevelParams } from '../rhythm/levels';
 import type { Judgement } from '../rhythm/scoring';
 import type { Chart, ChartTarget, TargetPosition } from '../rhythm/types';
@@ -38,6 +39,8 @@ export interface TargetEnv {
   readonly params: LevelParams;
   /** The song's beat times in song time, ascending (Analysis.beats). Use beatPosition() from world/synthwave to read it. */
   readonly beats: readonly number[];
+  /** Each target's part in the music (pattern, fill, drop, flourish), lined up with chart.targets, when known. */
+  readonly roles?: readonly TargetRole[];
 }
 
 /** One hittable part of a target: a burst has one per orb, every other kind has one. */

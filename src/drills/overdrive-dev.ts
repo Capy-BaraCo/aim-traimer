@@ -22,7 +22,7 @@
 import { add as addSong, prepare } from '../core/songs';
 import { store } from '../core/store';
 import type { Game } from '../core/game';
-import { generate, peekPosition } from '../rhythm/generator';
+import { compose, peekPosition } from '../rhythm/generator';
 import { presetById } from '../rhythm/presets';
 import type { Chart, ChartTarget, TargetKind, Wall } from '../rhythm/types';
 import type { App } from '../ui/app';
@@ -180,7 +180,7 @@ export function exposeOverdriveHook(game: Game): void {
     const t0 = performance.now();
     const { meta } = await addSong(file);
     const song = await prepare(meta.id, app.game.audio, (p) => console.debug(`[overdrive] ${p.stage} ${Math.round(p.fraction * 100)}%`));
-    const chart = generate(song.analysis, song.structure, presetById(meta.preset), level, meta.id);
+    const { chart, roles } = compose(song.analysis, song.structure, presetById(meta.preset), level, meta.id);
     const kinds: Partial<Record<TargetKind, number>> = {};
     for (const t of chart.targets) kinds[t.kind] = (kinds[t.kind] ?? 0) + 1;
     console.info(
@@ -189,7 +189,7 @@ export function exposeOverdriveHook(game: Game): void {
       kinds,
       `ready in ${Math.round(performance.now() - t0)} ms`,
     );
-    await launch({ chart, buffer: song.buffer, beats: song.analysis.beats, songName: song.meta.name });
+    await launch({ chart, roles, buffer: song.buffer, beats: song.analysis.beats, songName: song.meta.name });
   }) as Hook;
 
   overdrive.test = async (level = 5) => {

@@ -21,6 +21,7 @@ import { levelParams } from '../rhythm/levels';
 import { presetById } from '../rhythm/presets';
 import { ChartRun, ruleOf, type RunEvent } from '../rhythm/run';
 import type { ScoreResult } from '../rhythm/scoring';
+import type { TargetRole } from '../rhythm/generator';
 import type { Chart, Difficulty, FlickShape, TargetKind } from '../rhythm/types';
 import type { Figure } from '../world/figure';
 import { FlickRecorder } from './common';
@@ -38,6 +39,8 @@ export interface OverdriveContext {
   beats: number[];
   /** The song's name, for the HUD. */
   songName?: string;
+  /** Each target's part in the music, lined up with chart.targets (compose().roles), for cues on drops and fills. */
+  roles?: readonly TargetRole[];
 }
 
 /** Overdrive's DrillReport.data, for the debrief, coach and Logbook (T18). */
@@ -136,7 +139,7 @@ export class OverdriveDrill extends Drill {
     this.duration = ctx.chart.duration + 2;
     this.run = new ChartRun(ctx.chart, this.level);
     this.beats = ctx.beats.length >= 2 ? ctx.beats : steadyBeats(ctx.chart.duration);
-    this.env = { g, chart: ctx.chart, params: levelParams(this.level, presetById(ctx.chart.preset)), beats: this.beats };
+    this.env = { g, chart: ctx.chart, params: levelParams(this.level, presetById(ctx.chart.preset)), beats: this.beats, roles: ctx.roles };
     if (ctx.songName) this.kicker = `RHYTHM · ${ctx.songName.toUpperCase()}`;
   }
 
