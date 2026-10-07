@@ -14,10 +14,10 @@ import {
   type DrillId,
   type Finding,
 } from '../core/coach';
-import { MAX_LEVEL, rankFor, streak, unlockedLevel } from '../core/progress';
+import { rankFor, streak, unlockedLevel } from '../core/progress';
 import { store, type CommitResult } from '../core/store';
 import type { DrillReport } from '../drills/drill';
-import { DRILL_DEFS, drillDef, type DrillDef } from '../drills/registry';
+import { DRILL_DEFS, drillDef, levelCount, type DrillDef } from '../drills/registry';
 import type { App } from './app';
 import * as C from './charts';
 import { canFilm, openFilm } from './film';
@@ -71,7 +71,7 @@ function extrasFrom(r: DrillReport) {
   };
 }
 
-const levelFor = (id: string) => unlockedLevel(store.get().progress[id]);
+const levelFor = (id: string) => unlockedLevel(store.get().progress[id], levelCount(id));
 
 // ------------------------------------------------------------------------------------ briefing
 
@@ -79,14 +79,15 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
   const def = drillDef(id);
   if (!def) return;
   const prog = store.get().progress[id];
-  const unlocked = unlockedLevel(prog);
+  const max = def.levels.length;
+  const unlocked = unlockedLevel(prog, max);
   let sel = Math.min(level ?? unlocked, unlocked);
 
   const el = h(`<div class="overlay scroll"><div class="brief rise"></div></div>`);
   const box = el.querySelector('.brief') as HTMLElement;
   const render = () => {
     const res = prog?.levels[sel];
-    const chips = Array.from({ length: MAX_LEVEL }, (_, i) => {
+    const chips = Array.from({ length: max }, (_, i) => {
       const n = i + 1;
       const r = prog?.levels[n];
       const locked = n > unlocked;
@@ -108,8 +109,8 @@ export function openBriefing(app: App, id: DrillId, level?: number): void {
           <div class="mono muted" style="font-size:10px;margin-top:8px">${res ? `YOUR BEST · ${res.best} ${'★'.repeat(res.stars)}` : 'NOT PLAYED YET'}</div>
         </div>
       </div>
-      <div class="lvl-row" role="group" aria-label="Choose a level">${chips}</div>
-      <p class="lvl-desc"><span class="tag">Level ${sel}</span> ${esc(def.levels[sel - 1])}${sel < MAX_LEVEL && sel === unlocked ? ` — earn ★ to unlock level ${sel + 1}` : ''}</p>
+      <div class="lvl-row" style="--n:${max}" role="group" aria-label="Choose a level">${chips}</div>
+      <p class="lvl-desc"><span class="tag">Level ${sel}</span> ${esc(def.levels[sel - 1])}${sel < max && sel === unlocked ? ` — earn ★ to unlock level ${sel + 1}` : ''}</p>
       <div class="brief-cols">
         <section><h5>Your job</h5><ol>${def.job.map((j) => `<li>${esc(j)}</li>`).join('')}</ol></section>
         <section><h5>How you're scored</h5><p>${esc(def.scoring)}</p><h5>What we measure</h5><ul>${def.measures.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></section>
@@ -148,7 +149,7 @@ export function startDrill(app: App, def: DrillDef, level: number): void {
     () => def.make(app.game, level),
     (r) => {
       app.endPlay();
-      const commit = store.commitRun(def.id, level, r.score, def.stars, MAX_LEVEL, extrasFrom(r));
+      const commit = store.commitRun(def.id, level, r.score, def.stars, def.levels.length, extrasFrom(r));
       showDebrief(app, def, level, r, commit);
     },
   );
@@ -233,7 +234,7 @@ export function showDebrief(app: App, def: DrillDef, level: number, r: DrillRepo
           </div>
           <p class="db-note">${
             c.stars === 0
-              ? `Score ${def.stars[0]} to earn your first star${level < MAX_LEVEL ? ` and unlock level ${level + 1}` : ''}.`
+              ? `Score ${def.stars[0]} to earn your first star${level < def.levels.length ? ` and unlock level ${level + 1}` : ''}.`
               : c.previousBest !== null && !c.newBest
                 ? `Your best on this level is still ${c.previousBest}.`
                 : 'Saved to your Logbook.'
@@ -244,8 +245,8 @@ export function showDebrief(app: App, def: DrillDef, level: number, r: DrillRepo
             <div class="mono muted" style="font-size:9.5px">${rank.next ? `${rank.next.stars - c.totalStars} ★ to ${esc(rank.next.name)}` : 'Top rank reached'}</div>
           </div>
           <div class="db-actions">
-            ${level < MAX_LEVEL && unlockedNow > level ? `<button class="btn" data-act="nextlvl">Play level ${level + 1} <span class="arr">→</span></button>` : ''}
-            <button class="btn ${level < MAX_LEVEL && unlockedNow > level ? 'ghost' : ''}" data-act="retry">Retry level ${level} <span class="arr">↻</span></button>
+            ${level < def.levels.length && unlockedNow > level ? `<button class="btn" data-act="nextlvl">Play level ${level + 1} <span class="arr">→</span></button>` : ''}
+            <button class="btn ${level < def.levels.length && unlockedNow > level ? 'ghost' : ''}" data-act="retry">Retry level ${level} <span class="arr">↻</span></button>
             <button class="btn ghost" data-act="back">Back</button>
           </div>
         </div></aside>
@@ -302,7 +303,7 @@ export function runDaily(app: App): void {
   };
   const onDone = (i: number) => (r: DrillReport) => {
     const p = plan[i];
-    results.push({ ...p, report: r, commit: store.commitRun(p.def.id, p.level, r.score, p.def.stars, MAX_LEVEL, extrasFrom(r)) });
+    results.push({ ...p, report: r, commit: store.commitRun(p.def.id, p.level, r.score, p.def.stars, p.def.levels.length, extrasFrom(r)) });
     if (i + 1 < plan.length) app.chain(make(i + 1), onDone(i + 1), { countdown: 4, label: `Next · ${plan[i + 1].def.name}` });
     else {
       app.endPlay();

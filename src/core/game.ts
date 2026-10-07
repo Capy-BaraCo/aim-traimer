@@ -12,7 +12,7 @@ import { greek, Hud } from '../ui/hud';
 import { Audio } from './audio';
 import { Input } from './input';
 import { OW_YAW_DEG } from './sens';
-import type { Settings } from './store';
+import { isHex, type Settings } from './store';
 
 export interface WeaponSpec {
   name: string;
@@ -137,6 +137,14 @@ export class Game {
     this.hud.setScopeEnabled(s.showScope);
     this.audio.setVolume(s.volume);
     this.audio.spatial = s.spatialAudio;
+    // Every target reads its colour from the palette when it spawns; menu-screen bots respawn to show it now.
+    if (isHex(s.targetColor) && `#${PALETTE.targetCore.getHexString()}` !== s.targetColor.toLowerCase()) {
+      PALETTE.targetCore.set(s.targetColor);
+      if (this.mode === 'attract') {
+        this.clearFigures();
+        this.spawnAttractBots();
+      }
+    }
   }
 
   /** True when a world point is inside the current view (with `margin` of the half-screen, 1 = the edge). */

@@ -26,7 +26,10 @@ export interface DrillDef {
   make: (g: Game, level: number) => Drill;
 }
 
-const L = (level: number) => Math.min(MAX_LEVEL, Math.max(1, Math.round(level)));
+/** Clamp a level to 1..n for a drill with `n` levels. */
+const clampLevel = (level: number, n: number) => Math.min(n, Math.max(1, Math.round(level)));
+/** Most drills have MAX_LEVEL levels; Duelist, Blink and Triad go further. */
+const L = (level: number) => clampLevel(level, MAX_LEVEL);
 
 // ------------------------------------------------------------------ tracking ladder (Duelist, Crossfire)
 
@@ -57,6 +60,12 @@ const DUEL: DuelRow[] = [
   duelRow('duel', 1.0, 0.12, 0.09, 0.17, 0.75, 8, 11, 'Full Overwatch speed (5.5 m/s)'),
   duelRow('duel', 1.0, 0.14, 0.11, 0.16, 0.7, 7, 10, 'Close-range duel'),
   duelRow('duel', 1.0, 0.16, 0.13, 0.14, 0.62, 6, 9, 'Point-blank, maximum dodging'),
+  // 11–15: speed stays at Overwatch's 5.5 m/s; dodges get shorter and less readable.
+  duelRow('duel', 1.0, 0.18, 0.15, 0.13, 0.58, 6, 9, 'Shorter dodges, more jumps'),
+  duelRow('duel', 1.0, 0.2, 0.17, 0.12, 0.52, 6, 8, 'Sharp, uneven rhythm'),
+  duelRow('duel', 1.0, 0.22, 0.19, 0.11, 0.47, 5, 8, 'Close and twitchy'),
+  duelRow('duel', 1.0, 0.24, 0.21, 0.1, 0.42, 5, 7, 'Almost no warning before each turn'),
+  duelRow('duel', 1.0, 0.26, 0.23, 0.09, 0.38, 4, 7, 'Mirror match: point-blank, constant dodging'),
 ];
 
 // ------------------------------------------------------------------ flick ladders
@@ -83,6 +92,11 @@ const BLINK: FlickParams[] = [
   flickRow(0.22, 7, 28, 1.1, 22, true),
   flickRow(0.2, 7, 30, 1.0, 24, true),
   flickRow(0.18, 8, 32, 0.9, 24, true),
+  flickRow(0.17, 8, 32, 0.85, 24, true),
+  flickRow(0.16, 8, 34, 0.8, 26, true),
+  flickRow(0.15, 9, 34, 0.75, 26, true),
+  flickRow(0.14, 9, 36, 0.7, 28, true),
+  flickRow(0.13, 10, 36, 0.65, 28, true),
 ];
 
 const SNAP: FlickParams[] = [
@@ -137,11 +151,12 @@ const PIN = Array.from({ length: 10 }, (_, i) => ({
   drift: i < 5 ? 0 : (i - 4) * 0.16,
 }));
 
-const TRIAD = Array.from({ length: 10 }, (_, i) => ({
+const TRIAD = Array.from({ length: 15 }, (_, i) => ({
   count: i < 6 ? 3 : 4,
   hp: 100 + i * 11,
   duelShare: Math.min(1, 0.1 + i * 0.1),
-  speed: 0.6 + i * 0.045,
+  // Caps at Overwatch's full strafe speed (1.0) on level 10; past that, tougher and tankier.
+  speed: Math.min(1, 0.6 + i * 0.045),
 }));
 
 const CORNER = Array.from({ length: 10 }, (_, i) => ({
@@ -168,7 +183,10 @@ export const DRILL_DEFS: DrillDef[] = [
     tips: ['Relax your grip — tense hands make jerky aim.', 'Watch their body, not your crosshair.'],
     stars: [35, 50, 65],
     levels: DUEL.map((d) => d.label),
-    make: (g, level) => new DuelistDrill(g, DUEL[L(level) - 1], L(level)),
+    make: (g, level) => {
+      const n = clampLevel(level, DUEL.length);
+      return new DuelistDrill(g, DUEL[n - 1], n);
+    },
   },
   {
     id: 'blink',
@@ -188,7 +206,10 @@ export const DRILL_DEFS: DrillDef[] = [
     tips: ['Short flicks are mostly wrist and fingers.', "Don't click while the crosshair is still sliding."],
     stars: [45, 60, 75],
     levels: BLINK.map(flickLabel),
-    make: (g, level) => new FlickDrill(g, 'blink', 'Blink', 'SHORT FLICKS', BLINK[L(level) - 1], L(level)),
+    make: (g, level) => {
+      const n = clampLevel(level, BLINK.length);
+      return new FlickDrill(g, 'blink', 'Blink', 'SHORT FLICKS', BLINK[n - 1], n);
+    },
   },
   {
     id: 'snap',
@@ -248,7 +269,10 @@ export const DRILL_DEFS: DrillDef[] = [
     tips: ['Look for the next target while the current one is dying.', 'Closest first, unless someone is almost dead.'],
     stars: [40, 55, 70],
     levels: TRIAD.map((t) => `${t.count} enemies · ${t.hp} health · ${Math.round(t.duelShare * 100)}% dodgers`),
-    make: (g, level) => new TriadDrill(g, TRIAD[L(level) - 1], L(level)),
+    make: (g, level) => {
+      const n = clampLevel(level, TRIAD.length);
+      return new TriadDrill(g, TRIAD[n - 1], n);
+    },
   },
   {
     id: 'corner',
@@ -281,9 +305,12 @@ export const DRILL_DEFS: DrillDef[] = [
     measures: ['Time on target', 'Time spent moving', 'Reaction to their dodges'],
     tips: ['Your hand cancels out your own movement — that is the skill.', 'Uneven rhythms are harder to hit than steady ones.'],
     stars: [30, 45, 60],
-    levels: DUEL.map((d) => d.label),
+    levels: DUEL.slice(0, MAX_LEVEL).map((d) => d.label),
     make: (g, level) => new CrossfireDrill(g, DUEL[L(level) - 1], L(level)),
   },
 ];
 
 export const drillDef = (id: string): DrillDef | undefined => DRILL_DEFS.find((d) => d.id === id);
+
+/** How many levels a drill has (most have MAX_LEVEL). */
+export const levelCount = (id: string): number => drillDef(id)?.levels.length ?? MAX_LEVEL;

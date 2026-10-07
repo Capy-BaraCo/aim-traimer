@@ -2,7 +2,7 @@ import { median, summariseFlicks, type DirSector } from '../../core/analytics';
 import { feedback, flickFindings, placementFindings, trackingFindings, type DrillId, type Finding } from '../../core/coach';
 import { rankFor, streak, totalStars } from '../../core/progress';
 import { store } from '../../core/store';
-import { DRILL_DEFS } from '../../drills/registry';
+import { DRILL_DEFS, levelCount } from '../../drills/registry';
 import { App } from '../app';
 import * as C from '../charts';
 import { actions, esc, h } from '../dom';
@@ -17,7 +17,8 @@ const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 function rating(drill: string): number | null {
   const runs = store.get().sessions.filter((s) => s.drill === drill).slice(-8);
   if (!runs.length) return null;
-  return avg(runs.map((r) => (r.score / 100) * (0.55 + 0.45 * (r.level / 10))));
+  const n = levelCount(drill);
+  return avg(runs.map((r) => (r.score / 100) * (0.55 + 0.45 * Math.min(1, r.level / n))));
 }
 
 function landingWords(x: number): string {

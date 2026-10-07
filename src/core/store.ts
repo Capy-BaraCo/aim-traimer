@@ -44,6 +44,8 @@ export interface Settings {
   viewmodel: boolean;
   /** Real-time coaching cues during drills. */
   coachCues: boolean;
+  /** Colour of every target (orbs and enemies), as #rrggbb. */
+  targetColor: string;
   /** HRTF 3D audio for headphones; off = plain stereo panning for speakers. */
   spatialAudio: boolean;
   /** Positional sounds when targets appear (Snap, Echo, calibration wide flicks). */
@@ -109,6 +111,11 @@ export interface CommitResult extends RunOutcome {
   totalStars: number;
 }
 
+export const DEFAULT_TARGET_COLOR = '#ff3d12';
+
+/** A #rrggbb colour (what the colour picker and swatches produce). */
+export const isHex = (x: unknown): x is string => typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x);
+
 export const DEFAULT_SETTINGS: Settings = {
   dpi: 800,
   sens: 5,
@@ -117,6 +124,7 @@ export const DEFAULT_SETTINGS: Settings = {
   invertY: false,
   inputScale: 1,
   crosshair: { style: 'cross', color: '#3dffc8', length: 7, thickness: 2, gap: 4, outline: true },
+  targetColor: DEFAULT_TARGET_COLOR,
   volume: 0.6,
   fx: 'full',
   renderScale: 1,
@@ -158,6 +166,7 @@ function normalise(parsed: Partial<Profile>): Profile {
       ...fresh.settings,
       ...parsed.settings,
       crosshair: { ...fresh.settings.crosshair, ...parsed.settings?.crosshair },
+      targetColor: isHex(parsed.settings?.targetColor) ? parsed.settings!.targetColor : fresh.settings.targetColor,
       calSections: { ...fresh.settings.calSections, ...parsed.settings?.calSections },
     },
     history: arr(parsed.history),

@@ -240,6 +240,7 @@ export class FilmRoom {
       t: this.t,
       vfov: verticalFovFromOw(store.settings.fov),
       crosshair: store.settings.crosshair.color,
+      target: store.settings.targetColor,
       rate: b.rate * (this.prefs.slow ? 0.5 : 1),
     };
     const [screen, map, timeline] = this.cv;

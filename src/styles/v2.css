@@ -123,7 +123,7 @@
 
 .lvl-row {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--n, 10), minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -840,7 +840,7 @@
 
 .ladder {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--n, 10), minmax(0, 1fr));
   gap: 3px;
 }
 
@@ -1399,4 +1399,41 @@
   translate: -50% 0;
   border: 6px solid transparent;
   border-bottom: 8px solid var(--signal);
+}
+
+/* ---------------------------------------------------------------- target colour */
+
+.xhair-preview {
+  position: relative;
+}
+
+/* A target just off the crosshair, so you can judge the pair together. */
+.tgt-dot {
+  position: absolute;
+  left: calc(50% + 46px);
+  top: calc(50% - 30px);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--tc) 55%, white), var(--tc) 55%, color-mix(in srgb, var(--tc) 70%, black));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--tc) 60%, transparent);
+}
+
+.swatch-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px dashed var(--hair-2);
+  color: var(--dust);
+  cursor: pointer;
+}
+
+.swatch-pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }

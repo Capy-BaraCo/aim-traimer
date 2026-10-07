@@ -1,4 +1,4 @@
-import { drillStars, MAX_LEVEL, rankFor, streak, totalStars, unlockedLevel } from '../../core/progress';
+import { drillStars, rankFor, streak, totalStars, unlockedLevel } from '../../core/progress';
 import { store } from '../../core/store';
 import { DRILL_DEFS } from '../../drills/registry';
 import { App } from '../app';
@@ -17,8 +17,9 @@ App.register('training', (app) => {
   const card = (id: DrillId, i: number) => {
     const def = DRILL_DEFS.find((d) => d.id === id)!;
     const prog = p.progress[id];
-    const unlocked = unlockedLevel(prog);
-    const ladder = Array.from({ length: MAX_LEVEL }, (_, k) => {
+    const max = def.levels.length;
+    const unlocked = unlockedLevel(prog, max);
+    const ladder = Array.from({ length: max }, (_, k) => {
       const n = k + 1;
       const s = prog?.levels[n]?.stars ?? 0;
       const state = n > unlocked ? 'locked' : n === unlocked ? 'next' : 'done';
@@ -26,12 +27,12 @@ App.register('training', (app) => {
     }).join('');
     const scores = p.sessions.filter((s) => s.drill === id).slice(-12).map((s) => s.score);
     return `<article class="tcard rise" style="--d:${i}">
-      <div class="tc-top"><span class="kicker plain">${esc(def.skill)}</span><span class="mono muted">${drillStars(prog)}/${MAX_LEVEL * 3} ★</span></div>
+      <div class="tc-top"><span class="kicker plain">${esc(def.skill)}</span><span class="mono muted">${drillStars(prog)}/${max * 3} ★</span></div>
       <h3>${esc(def.name)}</h3>
       <p>${esc(def.oneLiner)}</p>
-      <div class="ladder" aria-label="Level ladder">${ladder}</div>
+      <div class="ladder" style="--n:${max}" aria-label="Level ladder">${ladder}</div>
       <div class="tc-foot">
-        <div><span class="mono muted">LEVEL</span> <b class="num">${unlocked}</b><span class="mono muted">/${MAX_LEVEL}</span></div>
+        <div><span class="mono muted">LEVEL</span> <b class="num">${unlocked}</b><span class="mono muted">/${max}</span></div>
         ${C.sparkline(scores)}
         <button class="btn small" data-act="brief" data-id="${id}">Play <span class="arr">→</span></button>
       </div>

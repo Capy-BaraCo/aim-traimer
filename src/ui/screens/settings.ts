@@ -1,10 +1,15 @@
 import { cmPer360, edpi, verticalFovFromOw } from '../../core/sens';
-import { DEFAULT_SETTINGS, store, type CrosshairStyle, type FxLevel, type Settings } from '../../core/store';
+import { DEFAULT_SETTINGS, DEFAULT_TARGET_COLOR, isHex, store, type CrosshairStyle, type FxLevel, type Settings } from '../../core/store';
 import { App } from '../app';
 import { actions, h, syncRange } from '../dom';
 import { crosshairSvg } from '../hud';
 
 const COLORS = ['#3dffc8', '#ffffff', '#ff4b1f', '#f7ff3c', '#ff3df2', '#27e0ff'];
+/** Target colours that stand out against the warm sand arena. The first is the default. */
+const TARGET_COLORS = [DEFAULT_TARGET_COLOR, '#ff2ad4', '#f5ff2a', '#20e6ff', '#3dff6e', '#f2f2f2'];
+
+/** The crosshair preview, with a target beside it so you can judge the contrast. */
+const preview = (s: Settings) => `<i class="tgt-dot" style="--tc:${s.targetColor}"></i>${crosshairSvg(s.crosshair)}`;
 
 App.register('settings', (app) => {
   const el = h('<div class="tools settings-grid"></div>');
@@ -52,8 +57,16 @@ App.register('settings', (app) => {
         ${row('Gap', '', range('crosshair.gap', 0, 12, 1, c.gap))}
         ${row('Outline', '', sw('crosshair.outline' as keyof Settings, c.outline))}
       </section>
+      <section class="panel glass span-7 rise">
+        <h4><span>Targets</span><span class="mono">${s.targetColor.toUpperCase()}</span></h4>
+        ${row(
+          'Target colour',
+          'Every orb and enemy. Pick one that stands out from your crosshair and the sand-coloured arena.',
+          `<div class="swatches">${TARGET_COLORS.map((col) => `<button style="background:${col}" class="${col === s.targetColor.toLowerCase() ? 'on' : ''}" data-act="tcolor" data-v="${col}" aria-label="Target colour ${col}"></button>`).join('')}<label class="swatch-pick" title="Any colour"><input type="color" data-tcolor value="${s.targetColor}" aria-label="Custom target colour"><span>+</span></label></div>`,
+        )}
+      </section>
       <section class="span-5 push-1 rise" style="display:grid;gap:16px;align-content:start">
-        <div class="xhair-preview">${crosshairSvg(c)}</div>
+        <div class="xhair-preview">${preview(s)}</div>
         <div class="panel glass">
           <h4><span>Graphics &amp; audio</span></h4>
           ${row('Effects', 'Bloom and grade cost a little GPU. Turn off if your FPS drops below your monitor’s refresh rate.', seg('fx', [['full', 'Full'], ['lite', 'Lite'], ['off', 'Off']], s.fx))}
@@ -111,7 +124,7 @@ App.register('settings', (app) => {
     }
     if ((key === 'sens' && v > 0) || (key === 'dpi' && v >= 50) || (key !== 'sens' && key !== 'dpi')) apply(key, v);
     const prev = el.querySelector('.xhair-preview');
-    if (prev && key.startsWith('crosshair.')) prev.innerHTML = crosshairSvg(store.settings.crosshair);
+    if (prev && key.startsWith('crosshair.')) prev.innerHTML = preview(store.settings);
   });
   el.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
@@ -120,6 +133,10 @@ App.register('settings', (app) => {
       if (t.dataset.set === 'spatialAudio') render();
     }
     if (t.type === 'number') render();
+    if (t.matches('[data-tcolor]') && isHex(t.value)) {
+      apply('targetColor', t.value.toLowerCase());
+      render();
+    }
   });
 
   actions(el, {
@@ -130,6 +147,10 @@ App.register('settings', (app) => {
     },
     color: (b) => {
       apply('crosshair.color', b.dataset.v);
+      render();
+    },
+    tcolor: (b) => {
+      apply('targetColor', b.dataset.v);
       render();
     },
     reset: () => {

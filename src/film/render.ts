@@ -31,6 +31,8 @@ export interface Frame {
   /** Vertical field of view, degrees. */
   vfov: number;
   crosshair: string;
+  /** Target colour from Settings, #rrggbb. */
+  target: string;
   /** Playback rate shown in the corner. */
   rate: number;
 }
@@ -45,6 +47,14 @@ function toAngles(take: Take, along: number, perp: number): { yaw: number; pitch
   const ux = Math.cos(take.dirDeg * DEG);
   const uy = Math.sin(take.dirDeg * DEG);
   return { yaw: take.distance * (along * ux - perp * uy), pitch: take.distance * (along * uy + perp * ux) };
+}
+
+/** Lighten (k > 0, toward white) or darken (k < 0, toward black) a #rrggbb colour. */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v: number) => Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k));
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(ch);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
 // ------------------------------------------------------------------------------------ projection
@@ -192,7 +202,7 @@ function drawView(g: CanvasRenderingContext2D, x0: number, y0: number, w: number
   const rpx = Math.max(3, (Math.tan(take.radius * DEG) / Math.max(0.2, q.z)) * fpx);
   if (alive || hitAge < 180) {
     if (alive) {
-      g.strokeStyle = 'rgba(255,75,31,0.35)';
+      g.strokeStyle = `${fr.target}59`;
       g.lineWidth = Math.max(2, rpx * 0.9);
       g.lineCap = 'round';
       g.beginPath();
@@ -212,9 +222,9 @@ function drawView(g: CanvasRenderingContext2D, x0: number, y0: number, w: number
       const k = alive ? 1 : 1 + hitAge / 90;
       g.globalAlpha = alive ? 1 : Math.max(0, 1 - hitAge / 180);
       const grad = g.createRadialGradient(q.x - rpx * 0.3, q.y - rpx * 0.3, rpx * 0.1, q.x, q.y, rpx * k);
-      grad.addColorStop(0, '#ff8a5c');
-      grad.addColorStop(1, '#c5300f');
-      g.shadowColor = 'rgba(255,75,31,0.7)';
+      grad.addColorStop(0, shade(fr.target, 0.45));
+      grad.addColorStop(1, shade(fr.target, -0.25));
+      g.shadowColor = `${fr.target}b3`;
       g.shadowBlur = 14;
       g.fillStyle = grad;
       g.beginPath();

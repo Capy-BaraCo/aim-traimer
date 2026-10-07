@@ -1,5 +1,5 @@
 import type { DrillId } from '../../core/coach';
-import { MAX_LEVEL, unlockedLevel } from '../../core/progress';
+import { unlockedLevel } from '../../core/progress';
 import { store } from '../../core/store';
 import { ProtractorDrill } from '../../drills/range';
 import { drillDef } from '../../drills/registry';
@@ -23,8 +23,9 @@ function drillCard(id: DrillId | 'protractor'): string {
   const def = drillDef(id);
   if (!def) return '';
   const prog = store.get().progress[id];
-  const unlocked = unlockedLevel(prog);
-  const rungs = Array.from({ length: MAX_LEVEL }, (_, k) => {
+  const max = def.levels.length;
+  const unlocked = unlockedLevel(prog, max);
+  const rungs = Array.from({ length: max }, (_, k) => {
     const n = k + 1;
     const s = prog?.levels[n]?.stars ?? 0;
     return `<i class="rung ${n > unlocked ? 'locked' : n === unlocked ? 'next' : 'done'} s${s}"></i>`;
@@ -34,9 +35,9 @@ function drillCard(id: DrillId | 'protractor'): string {
     <div class="kicker">${esc(def.skill)} drill</div>
     <h4>${esc(def.name)}</h4>
     <p>${esc(def.oneLiner)}</p>
-    <div class="ladder light">${rungs}</div>
+    <div class="ladder light" style="--n:${max}">${rungs}</div>
     <button class="btn" data-act="drill" data-id="${def.id}">Play level ${unlocked} <span class="arr">→</span></button>
-    <div class="best">${best != null ? `BEST ON LEVEL ${unlocked} · ${best}` : `LEVEL ${unlocked} OF ${MAX_LEVEL}`}</div>
+    <div class="best">${best != null ? `BEST ON LEVEL ${unlocked} · ${best}` : `LEVEL ${unlocked} OF ${max}`}</div>
   </div>`;
 }
 
