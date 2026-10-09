@@ -154,6 +154,10 @@ const STRENGTH_RADIUS = 2;
 const ORB_MIN_SECONDS = 0.09;
 const ORB_MAX_BEATS = 0.75;
 
+/** The shortest time (s) between two hit moments, at level 1 and level 10: roughly a small flick and settle. */
+const MIN_GAP_SECONDS_EASY = 0.32;
+const MIN_GAP_SECONDS_EXPERT = 0.26;
+
 /** Player and figure geometry in metres (OW stand heights, src/world/movement.ts). */
 const EYE_HEIGHT = 1.65;
 const FIGURE_HEIGHT = 1.9;
@@ -600,8 +604,11 @@ interface Feel {
   tapsWhileTracking: boolean;
 }
 
-function feelFor(p: LevelParams, level: number): Feel {
+function feelFor(p: LevelParams, level: number, period: number): Feel {
   const f = (level - 1) / 9;
+  // Beats are the wrong unit on fast songs: half a beat at 174 BPM is 0.17 s, too quick to flick to a new
+  // target. So the gap is also a minimum time, in half beats (rounded up, with a little give so a 120 BPM song is unchanged).
+  const gapBeats = Math.max(level <= 3 ? 1 : 0.5, Math.ceil((lerp(MIN_GAP_SECONDS_EASY, MIN_GAP_SECONDS_EXPERT, f) / period) * 2 - 0.2) / 2);
   return {
     p,
     f,
@@ -611,7 +618,7 @@ function feelFor(p: LevelParams, level: number): Feel {
     minJump: 7,
     maxJump: lerp(24, 50, f),
     minSep: 6,
-    minGap: level <= 3 ? 1 : 0.5,
+    minGap: gapBeats,
     turnGuard: lerp(2, 1, f),
     triangleArc: lerp(30, 90, f),
     burstOrbs: level <= 3 ? [3, 3] : level <= 7 ? [3, 4] : [4, 5],
@@ -754,7 +761,8 @@ class Composer {
     private readonly songId: string,
   ) {
     this.level = clamp(Math.trunc(Number.isFinite(level) ? level : 1), 1, 10);
-    this.feel = feelFor(levelParams(this.level, preset), this.level);
+    const bpmForFeel = Number.isFinite(analysis.bpm) && analysis.bpm >= 30 && analysis.bpm <= 300 ? analysis.bpm : 120;
+    this.feel = feelFor(levelParams(this.level, preset), this.level, 60 / bpmForFeel);
     this.random = mulberry32(chartSeed(songId, preset.id, this.level));
     this.duration = Number.isFinite(analysis.duration) && analysis.duration > 0 ? analysis.duration : 0;
     const bpm = Number.isFinite(analysis.bpm) && analysis.bpm >= 30 && analysis.bpm <= 300 ? analysis.bpm : 120;

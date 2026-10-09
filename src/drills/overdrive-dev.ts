@@ -162,7 +162,8 @@ export function exposeOverdriveHook(game: Game): void {
       document.body.classList.add('playing');
       app.game.startDrill(make(), onDone, { label: 'Overdrive' });
     };
-    if ((navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive) {
+    // Pointer lock also needs the page itself focused: from the DevTools console it isn't, so wait for a click.
+    if ((navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation?.isActive && document.hasFocus()) {
       await start();
       return;
     }
