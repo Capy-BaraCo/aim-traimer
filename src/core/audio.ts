@@ -157,6 +157,11 @@ export class Audio {
     this.tone(220, 0.05, 'sine', 0.05);
   }
 
+  /** One short note for effects built elsewhere (Overdrive's pops and sparkles). `when` is seconds from now. */
+  chime(freq: number, dur = 0.16, gain = 0.1, when = 0, type: OscillatorType = 'triangle', slideTo?: number): void {
+    this.tone(freq, dur, type, gain, when, slideTo);
+  }
+
   tick(): void {
     this.tone(1200, 0.03, 'square', 0.04);
   }

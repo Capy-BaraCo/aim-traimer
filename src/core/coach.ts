@@ -5,7 +5,7 @@
 
 import type { EchoSummary, FlickRecord, FlickSummary, TrackingSummary } from './analytics';
 
-export type DrillId = 'duelist' | 'blink' | 'snap' | 'echo' | 'pin' | 'triad' | 'corner' | 'crossfire';
+export type DrillId = 'duelist' | 'blink' | 'snap' | 'echo' | 'pin' | 'triad' | 'corner' | 'crossfire' | 'overdrive';
 
 export interface Finding {
   id: string;
@@ -400,6 +400,156 @@ export function switchingFindings(w: { switchMs: number; acc: number; kills: num
       body: `Only ${pct(w.acc)} of your shots hit while switching.`,
       tip: 'Arrive, then fire. Holding the trigger during the swing wastes ammo and hides nothing.',
       drill: 'triad',
+    });
+  return out;
+}
+
+/**
+ * Flick findings that are about speed from the moment a target appeared, or about the click's timing.
+ * In Overdrive a target lands before its beat and you are meant to wait for it, so "slow to start" and
+ * "clicked early or late" would blame the player for keeping time. Overdrive drops these (T18): the
+ * landing findings (overshoot, undershoot, curve, direction) still hold, and rhythmFindings measures
+ * timing from the beat instead.
+ */
+export const OVERDRIVE_SKIPPED_FLICK_FINDINGS: ReadonlySet<string> = new Set([
+  'slow-start',
+  'quick-start',
+  'slow-fix',
+  'early-click',
+  'late-click',
+]);
+
+/** What the coach reads from an Overdrive run (the shape of OverdriveReportData, without the drill). */
+export interface RhythmFacts {
+  /** Mean signed offset of the hits against the target beat, ms (negative is early). */
+  meanOffsetMs: number;
+  offsets: readonly number[];
+  /** 0..1 per target type that appeared (decoys left out). */
+  hitRate: Partial<Record<'flick' | 'burst' | 'strafer' | 'hold' | 'peeker', number>>;
+  hitRateByShape: Partial<Record<'circle' | 'diamond' | 'triangle', number>>;
+  decoysHit: number;
+}
+
+/** Past this average (ms) you are reliably early or late, and the coach says so. */
+export const TIMING_BIAS_MS = 25;
+
+/** Which drill trains each weak spot, in plain words. Flicks are judged by shape, so each shape points at its own drill. */
+const WEAK_SPOTS: { key: string; rate: (f: RhythmFacts) => number | undefined; name: string; drill: DrillId; tip: string }[] = [
+  {
+    key: 'strafer',
+    rate: (f) => f.hitRate.strafer,
+    name: 'strafing players',
+    drill: 'duelist',
+    tip: 'Keep your crosshair glued to the chest and hold the button the whole time they are out. Duelist trains exactly this.',
+  },
+  {
+    key: 'hold',
+    rate: (f) => f.hitRate.hold,
+    name: 'long holds',
+    drill: 'duelist',
+    tip: 'Press and keep the button down while you follow the target until it goes out. Duelist trains this smooth following.',
+  },
+  {
+    key: 'circle',
+    rate: (f) => f.hitRateByShape.circle,
+    name: 'circle flicks',
+    drill: 'blink',
+    tip: 'Look at the target, then move your whole hand in one motion and stop on it. Blink drills these short flicks.',
+  },
+  {
+    key: 'diamond',
+    rate: (f) => f.hitRateByShape.diamond,
+    name: 'small diamond targets',
+    drill: 'pin',
+    tip: 'Diamonds are small, so slow the last bit of the move and settle before you click. Pin trains this precision.',
+  },
+  {
+    key: 'triangle',
+    rate: (f) => f.hitRateByShape.triangle,
+    name: 'triangle flicks',
+    drill: 'snap',
+    tip: 'Triangles point the way to turn. Start turning as soon as you see one, with a big confident swing. Snap trains wide flicks.',
+  },
+  {
+    key: 'burst',
+    rate: (f) => f.hitRate.burst,
+    name: 'bursts of orbs',
+    drill: 'blink',
+    tip: 'Hop from orb to orb with short, quick flicks and click each one as you land on it. Blink trains short flicks.',
+  },
+  {
+    key: 'peeker',
+    rate: (f) => f.hitRate.peeker,
+    name: 'peekers',
+    drill: 'corner',
+    tip: 'Rest your crosshair at head height on the edge of the wall where they will show up. Corner Watch trains this.',
+  },
+];
+
+/**
+ * Overdrive's coaching: early or late against the beat, the target type that gives you most trouble (with the
+ * drill that trains it) and friendly fire. Timing is measured from each target's own beat, not from when it
+ * landed, so waiting for the beat never counts against you.
+ */
+export function rhythmFindings(f: RhythmFacts): Finding[] {
+  const out: Finding[] = [];
+  const mean = f.meanOffsetMs;
+  if (f.offsets.length >= 8 && ok(mean)) {
+    const off = Math.round(Math.abs(mean));
+    if (mean > TIMING_BIAS_MS)
+      out.push({
+        id: 'late-shots',
+        kind: 'fix',
+        weight: 0.7 + Math.min(0.25, (mean - TIMING_BIAS_MS) / 200),
+        title: "You're shooting late",
+        body: `On average your hits landed ${ms(off)} after the beat. You are on target, just a touch behind the music.`,
+        tip: 'Try clicking a touch earlier, on the beat you hear, not after it. Watch the ring close and click as it touches the target.',
+      });
+    else if (mean < -TIMING_BIAS_MS)
+      out.push({
+        id: 'early-shots',
+        kind: 'fix',
+        weight: 0.7 + Math.min(0.25, (-mean - TIMING_BIAS_MS) / 200),
+        title: "You're shooting early",
+        body: `On average your hits landed ${ms(off)} before the beat. You are rushing a little.`,
+        tip: 'Settle on the target and wait for the ring to close, then click on the beat. A steady hand beats a quick one here.',
+      });
+    else if (Math.abs(mean) <= 15)
+      out.push({
+        id: 'on-the-beat',
+        kind: 'good',
+        weight: 0.6,
+        title: 'You hit on the beat',
+        body: `Your hits were only ${ms(off)} from the beat on average. Your hands and your ears agree.`,
+        tip: 'Next: try a harder difficulty, or a faster song.',
+      });
+  }
+  const spots = WEAK_SPOTS.flatMap((w) => {
+    const rate = w.rate(f);
+    return rate !== undefined && ok(rate) ? [{ w, rate }] : [];
+  });
+  if (spots.length >= 2) {
+    const weakest = spots.reduce((a, b) => (b.rate < a.rate ? b : a));
+    const best = spots.reduce((a, b) => (b.rate > a.rate ? b : a));
+    if (weakest.rate < 0.7 && best.rate - weakest.rate >= 0.15)
+      out.push({
+        id: `weak-${weakest.w.key}`,
+        kind: 'fix',
+        weight: 0.55 + (0.7 - weakest.rate) * 0.6,
+        title: `Work on ${weakest.w.name}`,
+        body: `You hit ${pct(weakest.rate)} of the ${weakest.w.name}, against ${pct(best.rate)} of your best type.`,
+        tip: weakest.w.tip,
+        drill: weakest.w.drill,
+      });
+  }
+  if (f.decoysHit >= 2)
+    out.push({
+      id: 'friendly-fire',
+      kind: 'fix',
+      weight: 0.5,
+      title: 'You shot friendlies',
+      body: `You hit ${f.decoysHit} friendly targets. They cost you points and break your combo.`,
+      tip: 'Friendlies are blue and calm: leave them alone and keep your combo.',
     });
   return out;
 }

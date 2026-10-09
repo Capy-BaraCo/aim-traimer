@@ -31,6 +31,7 @@ export class Fx {
   private readonly geo = new BufferGeometry();
   private readonly tracers: { mesh: Mesh; t: number }[] = [];
   private readonly rings: { mesh: Mesh; t: number; max: number }[] = [];
+  private readonly shocks: { mesh: Mesh; t: number; max: number }[] = [];
 
   constructor(scene: Scene) {
     this.geo.setAttribute('position', new BufferAttribute(this.pos, 3));
@@ -93,6 +94,17 @@ export class Fx {
       scene.add(mesh);
       this.rings.push({ mesh, t: 1, max: 0.5 });
     }
+    // Upright rings for hit pops, turned to face the player when they go off.
+    const shockGeo = new RingGeometry(0.72, 1, 48);
+    for (let i = 0; i < 8; i++) {
+      const mesh = new Mesh(
+        shockGeo,
+        new MeshBasicMaterial({ color: PALETTE.signal, transparent: true, blending: AdditiveBlending, depthWrite: false }),
+      );
+      mesh.visible = false;
+      scene.add(mesh);
+      this.shocks.push({ mesh, t: 1, max: 1 });
+    }
   }
 
   private emit(p: Vector3, v: Vector3, color: Color, size: number, life: number): void {
@@ -107,12 +119,24 @@ export class Fx {
     this.alpha[i] = 1;
   }
 
-  sparks(at: Vector3, color: Color = PALETTE.targetRim, count = 10, speed = 3.5): void {
+  /** `size` scales the particles (1 is the usual spark; Overdrive's pops use more to read at range). */
+  sparks(at: Vector3, color: Color = PALETTE.targetRim, count = 10, speed = 3.5, size = 1): void {
     const v = new Vector3();
     for (let n = 0; n < count; n++) {
       v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(speed * (0.4 + Math.random()));
-      this.emit(at, v, color, 0.05 + Math.random() * 0.05, 0.18 + Math.random() * 0.22);
+      this.emit(at, v, color, (0.05 + Math.random() * 0.05) * size, 0.18 + Math.random() * 0.22);
     }
+  }
+
+  /** A ring that flares out from `at` and fades, standing up to face `toward` (the player). */
+  shockwave(at: Vector3, color: Color, radius: number, toward: Vector3): void {
+    const r = this.shocks.find((x) => x.t >= 1) ?? this.shocks[0];
+    r.t = 0;
+    r.max = radius;
+    r.mesh.position.copy(at);
+    r.mesh.lookAt(toward);
+    (r.mesh.material as MeshBasicMaterial).color.copy(color);
+    r.mesh.visible = true;
   }
 
   burst(at: Vector3, color: Color = PALETTE.signal): void {
@@ -177,6 +201,14 @@ export class Fx {
       const e = 1 - (1 - Math.min(1, r.t)) ** 3;
       r.mesh.scale.setScalar(0.2 + e * r.max);
       (r.mesh.material as MeshBasicMaterial).opacity = Math.max(0, 1 - r.t) * 0.8;
+      if (r.t >= 1) r.mesh.visible = false;
+    }
+    for (const r of this.shocks) {
+      if (r.t >= 1) continue;
+      r.t += dt / 0.3;
+      const e = 1 - (1 - Math.min(1, r.t)) ** 3;
+      r.mesh.scale.setScalar(r.max * (0.25 + 0.9 * e));
+      (r.mesh.material as MeshBasicMaterial).opacity = Math.max(0, 1 - r.t) ** 1.5 * 0.9;
       if (r.t >= 1) r.mesh.visible = false;
     }
   }

@@ -5,7 +5,9 @@ import type { StyleTuning } from '../world/brain';
 import type { Drill } from './drill';
 import { EchoDrill, type EchoParams } from './echo';
 import { FlickDrill, PinDrill, type FlickParams } from './flick';
-import type { OverdriveContext } from './overdrive';
+import { DIFFICULTY_BANDS, levelParams } from '../rhythm/levels';
+import type { Difficulty } from '../rhythm/types';
+import { makeOverdrive, type OverdriveContext } from './overdrive';
 import { CornerWatchDrill } from './placement';
 import { TriadDrill } from './switching';
 import { CrossfireDrill, DuelistDrill, type DuelParams } from './tracking';
@@ -290,6 +292,33 @@ export const DRILL_DEFS: DrillDef[] = [
     stars: [30, 45, 60],
     levels: DUEL.map((d) => d.label),
     make: (g, level) => new CrossfireDrill(g, DUEL[L(level) - 1], L(level)),
+  },
+  {
+    id: 'overdrive',
+    name: 'Overdrive',
+    skill: 'Rhythm',
+    kicker: 'RHYTHM',
+    chapter: 'routine',
+    oneLiner: 'Play your own song. Targets land on the beat, and you shoot each one in time with the music.',
+    job: [
+      'Add a song of your own, pick a difficulty and press play.',
+      'Shoot each target as the ring closes on it. A click close to the beat is Perfect.',
+      'Click for shapes, bursts and peekers; hold the button on strafers and holds. Leave the blue friendlies alone.',
+    ],
+    scoring: 'Your score is how many targets you hit, with extra for Perfect hits and a long combo. Missing a target or shooting a friendly breaks your combo.',
+    measures: ['How early or late your hits are against the beat', 'How many of each target type you hit', 'Your longest combo'],
+    tips: [
+      'Click on the beat you hear, not when you first see the target.',
+      "You can't miss by being a little early or late inside the window, so find the rhythm first and aim second.",
+      'Stand still: this drill is about your aim and your timing.',
+    ],
+    stars: [40, 55, 70],
+    levels: Array.from({ length: MAX_LEVEL }, (_, i) => {
+      const p = levelParams(i + 1);
+      const band = (Object.keys(DIFFICULTY_BANDS) as Difficulty[]).find((d) => i + 1 >= DIFFICULTY_BANDS[d].from && i + 1 <= DIFFICULTY_BANDS[d].to)!;
+      return `${band[0].toUpperCase()}${band.slice(1)} · Perfect within ${Math.round(p.perfectMs)} ms · up to ${p.maxConcurrent} at once`;
+    }),
+    make: (g, level, ctx) => makeOverdrive(g, L(level), ctx),
   },
 ];
 

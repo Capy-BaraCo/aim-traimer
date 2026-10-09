@@ -1,6 +1,8 @@
 import { drillStars, MAX_LEVEL, rankFor, streak, totalStars, unlockedLevel } from '../../core/progress';
 import { store } from '../../core/store';
 import { DRILL_DEFS } from '../../drills/registry';
+import { DIFFICULTY_BANDS, unlockedInBand } from '../../rhythm/levels';
+import { DIFFICULTIES } from '../../rhythm/types';
 import { App } from '../app';
 import * as C from '../charts';
 import { actions, esc, h } from '../dom';
@@ -38,6 +40,35 @@ App.register('training', (app) => {
     </article>`;
   };
 
+  // Overdrive plays your own songs and unlocks inside each difficulty (D17), so it gets its own card.
+  const od = DRILL_DEFS.find((d) => d.id === 'overdrive')!;
+  const odProg = p.progress.overdrive;
+  const odRungs = DIFFICULTIES.map((d) => {
+    const band = DIFFICULTY_BANDS[d];
+    const open = unlockedInBand(odProg, d);
+    const rungs = Array.from({ length: band.to - band.from + 1 }, (_, k) => {
+      const n = band.from + k;
+      const s = odProg?.levels[n]?.stars ?? 0;
+      const state = n > open ? 'locked' : n === open ? 'next' : 'done';
+      return `<i class="rung ${state} s${s}" title="${d[0].toUpperCase()}${d.slice(1)}, level ${n}: ${n > open ? 'locked' : `${s}/3 stars`}"></i>`;
+    }).join('');
+    return `<div class="od-band" style="--n:${band.to - band.from + 1}"><span class="mono muted">${d.toUpperCase()}</span><div class="od-rungs">${rungs}</div></div>`;
+  }).join('');
+  const odScores = p.sessions.filter((s) => s.drill === 'overdrive').slice(-12).map((s) => s.score);
+  const odCard = `<article class="od-card rise">
+      <div class="od-card-art" aria-hidden="true"><i></i></div>
+      <div class="od-card-main">
+        <div class="tc-top"><span class="kicker plain">${esc(od.skill)} · your own music</span><span class="mono muted">${drillStars(odProg)}/${MAX_LEVEL * 3} ★</span></div>
+        <h3>${esc(od.name)}</h3>
+        <p>${esc(od.oneLiner)}</p>
+        <div class="od-bands" aria-label="Levels by difficulty">${odRungs}</div>
+        <div class="tc-foot">
+          ${C.sparkline(odScores)}
+          <button class="btn small" data-act="songs">Pick a song <span class="arr">→</span></button>
+        </div>
+      </div>
+    </article>`;
+
   const order: DrillId[] = ['blink', 'snap', 'echo', 'duelist', 'crossfire', 'corner', 'triad', 'pin'];
   const count = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'][DAILY.length] ?? String(DAILY.length);
   const el = h(`
@@ -64,11 +95,13 @@ App.register('training', (app) => {
         </div>
         <button class="btn" data-act="daily">Start warm-up <span class="arr">→</span></button>
       </section>
+      ${odCard}
       <section class="tgrid">${order.map(card).join('')}</section>
     </div>`);
   actions(el, {
     brief: (b) => openBriefing(app, b.dataset.id as DrillId),
     daily: () => runDaily(app),
+    songs: () => app.go('songs'),
   });
   return { el };
 });

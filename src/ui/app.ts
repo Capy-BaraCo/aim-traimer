@@ -6,7 +6,7 @@ import type { Drill, DrillReport } from '../drills/drill';
 import { installTooltips } from './charts';
 import { $, actions, esc, h, stagger } from './dom';
 
-export type Route = 'home' | 'calibrate' | 'training' | 'manual' | 'logbook' | 'range' | 'tools' | 'settings';
+export type Route = 'home' | 'calibrate' | 'training' | 'manual' | 'logbook' | 'range' | 'tools' | 'settings' | 'songs';
 
 export interface Screen {
   el: HTMLElement;
@@ -17,7 +17,7 @@ export interface Screen {
 type ScreenFactory = (app: App, arg?: unknown) => Screen;
 
 /** Reading screens: the backdrop sits under a near-opaque scrim. */
-const HEAVY: Route[] = ['manual', 'settings', 'logbook', 'training'];
+const HEAVY: Route[] = ['manual', 'settings', 'logbook', 'training', 'songs'];
 
 const NAV: { route: Route; n: string; label: string }[] = [
   { route: 'calibrate', n: '01', label: 'CALIBRATE' },
@@ -130,7 +130,7 @@ export class App {
     this.screens.replaceChildren(screen.el);
     stagger(screen.el);
     requestAnimationFrame(() => screen.el.classList.add('enter'));
-    this.spine.querySelectorAll<HTMLElement>('nav button').forEach((b) => b.classList.toggle('on', b.dataset.route === route));
+    this.spine.querySelectorAll<HTMLElement>('nav button').forEach((b) => b.classList.toggle('on', b.dataset.route === (route === 'songs' ? 'training' : route)));
     this.ui.querySelector('.scrim')!.classList.toggle('heavy', HEAVY.includes(route));
     this.syncBackdrop();
   }

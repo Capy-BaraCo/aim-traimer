@@ -24,6 +24,7 @@ import type { ScoreResult } from '../rhythm/scoring';
 import type { TargetRole } from '../rhythm/generator';
 import type { Chart, Difficulty, FlickShape, TargetKind } from '../rhythm/types';
 import type { Figure } from '../world/figure';
+import { beatPosition } from '../world/synthwave';
 import { FlickRecorder } from './common';
 import { Drill, pct, type DrillReport, type ReportStat } from './drill';
 import { createCue, createHud, stripEntries, type OverdriveHud, type StripEntry, type TargetCue } from './overdrive-cues';
@@ -186,6 +187,7 @@ export class OverdriveDrill extends Drill {
     }
     this.hud?.frame({
       t,
+      beat: beatPosition(this.beats, t),
       combo: this.run.combo,
       multiplier: this.run.multiplier,
       score: this.stats.score,
@@ -396,7 +398,7 @@ export class OverdriveDrill extends Drill {
 
   /** The beat strip's entries (T16 draws them): targets from half a beat past to four beats ahead. */
   private strip(t: number): StripEntry[] {
-    return stripEntries(this.chart, this.env.beats, t);
+    return stripEntries(this.chart, this.env.beats, t, 4, 0.5, this.ctx.roles);
   }
 
   private notes(r: ScoreResult): string[] {

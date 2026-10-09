@@ -17,6 +17,7 @@ import { App } from './ui/app';
 import './ui/screens/home';
 import './ui/screens/calibrate';
 import './ui/screens/training';
+import './ui/screens/songs';
 import './ui/screens/manual';
 import './ui/screens/logbook';
 import './ui/screens/range';

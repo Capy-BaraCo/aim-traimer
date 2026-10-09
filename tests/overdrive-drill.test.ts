@@ -26,8 +26,13 @@ function fakeGame(chart: Chart) {
   let music = false;
   const g = {
     figures,
-    engine: { scene },
-    audio: { songTime: () => clock.t, playMusic: () => (music = true), spawn() {}, miss() {} },
+    engine: { scene, camera: cam },
+    // Every effect and sound is a no-op here; only the ones below carry state the tests read.
+    fx: new Proxy({}, { get: () => () => {} }),
+    audio: new Proxy(
+      { songTime: () => clock.t, playMusic: () => (music = true) } as Record<string, unknown>,
+      { get: (t, k: string) => t[k] ?? (() => {}) },
+    ),
     hud: { setStats() {}, flashToast() {}, cue() {} },
     input: { fireHeld: false },
     clock: 0,

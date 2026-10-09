@@ -2,12 +2,19 @@ import {
   AdditiveBlending,
   CapsuleGeometry,
   Color,
+  EdgesGeometry,
+  ExtrudeGeometry,
   Group,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
+  OctahedronGeometry,
   PlaneGeometry,
+  Quaternion,
   RingGeometry,
   ShaderMaterial,
+  Shape,
   SphereGeometry,
   TorusGeometry,
   Vector3,
@@ -19,6 +26,17 @@ import { Mover, OW } from './movement';
 import { PALETTE } from './palette';
 
 export type HitPart = 'head' | 'body';
+
+/**
+ * What an orb figure looks like and is hit as. 'sphere' is the classic orb. The other two are
+ * Overdrive's flick shapes (D14): the hit volume is the drawn solid itself, not a sphere around it.
+ */
+export type OrbShape = 'sphere' | 'diamond' | 'triangle';
+
+/** A diamond is an octahedron this much taller than wide (radius 1 across, DIAMOND_TALL up and down). */
+export const DIAMOND_TALL = 1.25;
+/** A triangle is a flat plate (circumradius 1) with this half thickness, apex up before it is rolled. */
+export const TRIANGLE_HALF = 0.2;
 
 export interface FigureHit {
   t: number;
@@ -42,6 +60,40 @@ const ringGeo = new RingGeometry(0.46, 0.54, 48);
 const barGeo = new PlaneGeometry(0.9, 0.07);
 const orbGeo = new SphereGeometry(1, 28, 18);
 const gyroGeo = new TorusGeometry(1.45, 0.035, 6, 64);
+
+const diamondGeo = new OctahedronGeometry(1, 0).scale(1, DIAMOND_TALL, 1);
+const triangleGeo = (() => {
+  const shape = new Shape();
+  shape.moveTo(0, 1);
+  shape.lineTo(-Math.cos(Math.PI / 6), -0.5);
+  shape.lineTo(Math.cos(Math.PI / 6), -0.5);
+  shape.closePath();
+  const geo = new ExtrudeGeometry(shape, { depth: TRIANGLE_HALF * 2, bevelEnabled: false });
+  return geo.translate(0, 0, -TRIANGLE_HALF);
+})();
+const diamondEdges = new EdgesGeometry(diamondGeo);
+const triangleEdges = new EdgesGeometry(triangleGeo);
+
+/** A convex solid as planes `n · x <= d` (in the shape's own frame, radius 1), for exact ray tests. */
+interface Plane {
+  n: Vector3;
+  d: number;
+}
+const DIAMOND_PLANES: Plane[] = (() => {
+  const out: Plane[] = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    // |x| + |y| / DIAMOND_TALL + |z| <= 1
+    const n = new Vector3(sx, sy / DIAMOND_TALL, sz);
+    const len = n.length();
+    out.push({ n: n.divideScalar(len), d: 1 / len });
+  }
+  return out;
+})();
+const TRIANGLE_PLANES: Plane[] = [
+  { n: new Vector3(0, 0, 1), d: TRIANGLE_HALF },
+  { n: new Vector3(0, 0, -1), d: TRIANGLE_HALF },
+  ...[270, 30, 150].map((deg) => ({ n: new Vector3(Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180), 0), d: 0.5 })),
+];
 
 function barMaterial(): ShaderMaterial {
   return new ShaderMaterial({
@@ -90,6 +142,9 @@ export class Figure {
   private readonly ring: Mesh;
   private readonly bar?: Mesh;
   private readonly gyro?: Mesh;
+  private readonly core: Color;
+  private orbShape: OrbShape = 'sphere';
+  private readonly _q = new Quaternion();
   private flash = 0;
   private dying = -1;
   private readonly lastPos = new Vector3();
@@ -99,6 +154,7 @@ export class Figure {
     this.kind = kind;
     this.mover = new Mover(colliders, bounds);
     const core = color ?? PALETTE.targetCore;
+    this.core = core;
     const mat = hardLightMaterial(core);
     this.mats.push(mat);
 
@@ -139,6 +195,52 @@ export class Figure {
     return this.mover.pos;
   }
 
+  /**
+   * Turn an orb into a diamond or a triangle (orbs only; `orbRadius` is then the shape's radius
+   * across). Both are drawn solid with a bright edge, and shots are tested against the solid itself,
+   * so a click hits exactly where the shape is drawn. Additive: a plain orb is unchanged.
+   */
+  setOrbShape(shape: OrbShape): void {
+    if (this.kind !== 'orb' || shape === this.orbShape) return;
+    this.orbShape = shape;
+    this.head.rotation.order = 'YXZ';
+    if (this.gyro) this.gyro.visible = shape === 'sphere';
+    if (shape === 'sphere') return;
+    this.head.geometry = shape === 'diamond' ? diamondGeo : triangleGeo;
+    const rim = new LineBasicMaterial({ color: this.core.clone().lerp(new Color('#ffffff'), 0.75) });
+    this.head.add(new LineSegments(shape === 'diamond' ? diamondEdges : triangleEdges, rim));
+  }
+
+  /** Turn a diamond or triangle: `yaw` about the vertical, then (triangle) `roll` in its own plane. Shots follow the same pose. */
+  setOrbPose(yaw: number, roll = 0): void {
+    this.head.rotation.set(0, yaw, roll, 'YXZ');
+  }
+
+  /** Ray against the drawn diamond or triangle: clip the ray to each plane of the solid (slab test). */
+  private rayShape(o: Vector3, d: Vector3): FigureHit | null {
+    const planes = this.orbShape === 'diamond' ? DIAMOND_PLANES : TRIANGLE_PLANES;
+    const r = this.orbRadius;
+    const inv = this._q.copy(this.head.quaternion).invert();
+    const lo = this._a.copy(o).sub(this.mover.pos).divideScalar(r).applyQuaternion(inv);
+    const ld = this._b.copy(d).applyQuaternion(inv);
+    let near = 0;
+    let far = Infinity;
+    for (const { n, d: dist } of planes) {
+      const speed = n.dot(ld);
+      const room = dist - n.dot(lo);
+      if (Math.abs(speed) < 1e-9) {
+        if (room < 0) return null;
+        continue;
+      }
+      const t = room / speed;
+      if (speed < 0) near = Math.max(near, t);
+      else far = Math.min(far, t);
+      if (near > far) return null;
+    }
+    const t = near * r;
+    return { t, part: 'head', point: o.clone().addScaledVector(d, t) };
+  }
+
   private get crouchK(): number {
     return 1 + (HB.crouchScale - 1) * this.mover.crouchT;
   }
@@ -170,6 +272,7 @@ export class Figure {
 
   ray(o: Vector3, d: Vector3): FigureHit | null {
     if (!this.alive) return null;
+    if (this.kind === 'orb' && this.orbShape !== 'sphere') return this.rayShape(o, d);
     this.headCenter(this._h);
     const th = raySphere(o, d, this._h, this.headRadius);
     let t = th;

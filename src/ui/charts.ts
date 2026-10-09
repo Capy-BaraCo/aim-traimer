@@ -431,6 +431,73 @@ export function radar(axes: { label: string; value: number | null }[], surface: 
   return svg(W, H, body, 'Aim fingerprint');
 }
 
+/**
+ * Overdrive: when your hits landed against the beat, early on the left to late on the right (ms).
+ * The shaded strip is the Perfect width; the line is your average. The outer bars hold everything beyond.
+ */
+export function timingHistogram(offsets: readonly number[], perfectMs: number, surface: Surface = 'dark'): string {
+  const t = THEMES[surface];
+  if (!offsets.length) return '';
+  const lim = 250;
+  const step = 25;
+  const n = (lim * 2) / step;
+  const bins = new Array<number>(n).fill(0);
+  for (const o of offsets) bins[clamp(Math.floor((o + lim) / step), 0, n - 1)]++;
+  const peak = Math.max(...bins);
+  const W = 560;
+  const H = 170;
+  const L = 8;
+  const B = 28;
+  const top = 14;
+  const bw = (W - L * 2) / n;
+  const xOf = (ms: number) => L + ((clamp(ms, -lim, lim) + lim) / (lim * 2)) * (W - L * 2);
+  let body = `<rect x="${xOf(-perfectMs)}" y="${top}" width="${xOf(perfectMs) - xOf(-perfectMs)}" height="${H - B - top}" fill="${t.band}"/>`;
+  body += `<line x1="${L}" y1="${H - B}" x2="${W - L}" y2="${H - B}" stroke="${t.grid}"/>`;
+  bins.forEach((c, i) => {
+    if (!c) return;
+    const mid = -lim + (i + 0.5) * step;
+    const h = Math.max(3, (c / peak) * (H - B - top - 4));
+    const lo = -lim + i * step;
+    const label = i === 0 ? `earlier than ${-lim + step} ms` : i === n - 1 ? `later than ${lim - step} ms` : `${lo} to ${lo + step} ms`;
+    body += `<g class="mark" ${tip(`${c} hit${c > 1 ? 's' : ''}, ${label}`)}><rect x="${L + i * bw + 1}" y="${H - B - h}" width="${bw - 2}" height="${h}" rx="2" fill="${mid < 0 ? t.under : t.over}"/></g>`;
+  });
+  const mean = offsets.reduce((a, b) => a + b, 0) / offsets.length;
+  body += `<line x1="${xOf(mean)}" y1="${top - 4}" x2="${xOf(mean)}" y2="${H - B}" stroke="${t.ink}" stroke-width="2"/>`;
+  body += text(clamp(xOf(mean), 60, W - 60), top - 5, `average ${mean >= 0 ? '+' : '−'}${Math.round(Math.abs(mean))} ms`, t.ink, 'middle');
+  body += text(L, H - 8, `EARLY ${-lim} ms`, t.muted, 'start');
+  body += text(W / 2, H - 8, 'ON THE BEAT', t.ink, 'middle');
+  body += text(W - L, H - 8, `${lim} ms LATE`, t.muted, 'end');
+  return `<figure class="chart-fig" data-chart="timing"><figcaption>When you hit, against the beat</figcaption>${svg(W, H, body, 'Timing of your hits from early to late')}${legend(
+    [
+      { color: t.under, label: 'early', kind: 'rect' },
+      { color: t.over, label: 'late', kind: 'rect' },
+      { color: t.band, label: 'Perfect', kind: 'rect' },
+    ],
+    t,
+  )}</figure>`;
+}
+
+/** Overdrive: the share of each target type you hit, one bar per type (rates are 0..1). */
+export function hitRateBars(rows: readonly { label: string; rate: number }[], surface: Surface = 'dark'): string {
+  const t = THEMES[surface];
+  if (!rows.length) return '';
+  const W = 560;
+  const rowH = 30;
+  const L = 130;
+  const R = 56;
+  const H = rows.length * rowH + 6;
+  let body = '';
+  rows.forEach((r, i) => {
+    const y = 4 + i * rowH;
+    const w = clamp(r.rate, 0, 1) * (W - L - R);
+    body += text(0, y + 14, r.label, t.ink);
+    body += `<rect x="${L}" y="${y + 2}" width="${W - L - R}" height="16" rx="3" fill="${t.band}"/>`;
+    body += `<g class="mark" ${tip(`${r.label}: ${pct(r.rate)} hit`)}>${w > 0.5 ? `<rect x="${L}" y="${y + 2}" width="${Math.max(3, w)}" height="16" rx="3" fill="${r.rate < 0.5 ? t.over : t.under}"/>` : ''}</g>`;
+    body += text(W - R + 8, y + 14, pct(r.rate), t.ink);
+  });
+  return `<figure class="chart-fig" data-chart="hitrate"><figcaption>How many of each you hit</figcaption>${svg(W, H, body, 'Hit rate per target type')}</figure>`;
+}
+
 /** Small trend line for a series of scores. */
 export function sparkline(values: readonly number[], surface: Surface = 'dark', w = 140, h = 36): string {
   const t = THEMES[surface];

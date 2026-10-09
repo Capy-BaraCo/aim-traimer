@@ -198,6 +198,9 @@ export class Hud {
 
   flashToast(text: string, kind = ''): void {
     this.toast.textContent = text;
+    // Drop the class first so the animation plays again when the same word repeats.
+    this.toast.className = 'hud-toast';
+    void this.toast.offsetWidth;
     this.toast.className = `hud-toast on ${kind}`;
     this.toastTimer = 0.7;
   }
