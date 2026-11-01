@@ -20,6 +20,10 @@ npm run build      # typecheck + vite build into dist/ (relative paths)
 - Pure logic (maths, analytics, scoring) stays free of DOM and WebAudio so vitest can run it in node.
 - User-facing copy is plain words for beginners, in the coach / Field Manual voice.
 
+## Design
+
+Read `DESIGN.md` before touching any UI, copy or styles: it holds the binding design constraints (tokens, components, navigation, voice, how Overdrive sits in the menus).
+
 ## Active plan: Overdrive (rhythm drill)
 
 The next feature is planned in `.plan/plans/rhythm-drill/`. Before working on it, read:
