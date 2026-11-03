@@ -13,6 +13,7 @@ import { structure as buildStructure } from '../rhythm/sections';
 import type { Analysis, Difficulty, PresetId, SongMeta, Structure } from '../rhythm/types';
 import type { AnalyseRequest, WorkerReply } from '../rhythm/worker-protocol';
 import type { Audio } from './audio';
+import { sha256 } from './sha256';
 
 const DB_NAME = 'azimuth-songs';
 const DB_VERSION = 1;
@@ -58,8 +59,11 @@ function wrap(e: unknown): SongLibraryError {
 
 /** SHA-256 of some bytes as lowercase hex: a song's id, so the same file is only kept once. */
 export async function sha256Hex(bytes: ArrayBuffer | Uint8Array): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  // SubtleCrypto exists only in secure contexts (HTTPS, localhost). Plain-HTTP hosts use the JS fallback.
+  const subtle = globalThis.crypto?.subtle;
+  const digest = subtle ? new Uint8Array(await subtle.digest('SHA-256', data as BufferSource)) : sha256(data);
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** A song's display name: the file name without its extension ("Better by Moonlight.mp3" becomes "Better by Moonlight"). */
