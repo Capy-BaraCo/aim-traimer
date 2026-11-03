@@ -88,7 +88,7 @@ Binding rules for anything that extends this:
 
 1. **Reachable from Training only** (plus the Songs screen's own links). Not in the spine, not as a Home tile.
 2. **Not in the daily warm-up or the streak** (D15); keep it out of `DAILY`.
-3. **No built-in song**; the empty state asks for one (D11). Songs and audio never go into `localStorage` or the settings backup export.
+3. **Samples, not a built-in library.** The owner's two sample songs ship in `public/samples/` and are offered as "Try a sample" on the song screen; they go through the normal add path. The empty state still asks for a song. Songs and audio never go into `localStorage` or the settings backup export. (Overrides D11 at the owner's request; the plan still says D11 until it is changed on the planner board.)
 4. **No setup screens**: no preview, tap-tempo or tempo nudge, no chart editor (D3). Add song → analysed automatically → briefing → Start.
 5. Difficulty is a per-song pill (Easy/Normal/Hard/Expert) mapped to a level band (D9, D10, D17); styles stay `MIXED` only (D8).
 6. Overdrive's Synthwave look is confined to its card, the song screen and the in-run world/HUD.

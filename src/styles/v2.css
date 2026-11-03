@@ -2195,6 +2195,15 @@
   font-size: 13px;
 }
 
+/* Overdrive: sample songs row (song screen) */
+
+.od-samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 /* Training: the Overdrive card. */
 
 .od-card {

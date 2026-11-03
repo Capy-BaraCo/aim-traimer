@@ -4,7 +4,9 @@
  * moment it is added, so there is nothing to set up: its briefing opens by itself when it is ready
  * and Start is the one click left.
  */
+import { SAMPLE_SONGS } from '../../core/samples';
 import * as songs from '../../core/songs';
+import { songNameFromFile } from '../../core/songs';
 import { DIFFICULTIES, type Difficulty, type SongMeta } from '../../rhythm/types';
 import { App } from '../app';
 import { actions, esc, h } from '../dom';
@@ -100,6 +102,10 @@ App.register('songs', (app) => {
         </div>
         <button class="btn" data-act="pick">Add song <span class="arr">+</span></button>
       </section>
+      <section class="od-samples" aria-label="Sample songs">
+        <span class="mono muted">TRY A SAMPLE</span>
+        ${SAMPLE_SONGS.map((s) => `<button class="btn ghost small" data-act="sample" data-file="${esc(s.file)}">${esc(songNameFromFile(s.file))} <span class="arr">+</span></button>`).join('')}
+      </section>
       ${notice ? `<p class="od-notice" role="status">${esc(notice)}</p>` : ''}
       ${problemsOf()}
       ${body}`;
@@ -181,6 +187,21 @@ App.register('songs', (app) => {
   actions(el, {
     back: () => app.go('training'),
     pick: () => input()?.click(),
+    sample: (b) => {
+      const name = b.dataset.file!;
+      notice = '';
+      // Fetch the bundled file and add it like any upload, so it is analysed and kept in the library.
+      fetch(`samples/${encodeURIComponent(name)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => addFiles([new File([blob], name, { type: 'audio/mpeg' })]))
+        .catch(() => {
+          notice = "That sample didn't load. Check your connection and try again.";
+          render();
+        });
+    },
     play: (b) => {
       const m = list.find((x) => x.id === b.dataset.id);
       if (m) openOverdriveBriefing(app, m);
